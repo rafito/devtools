@@ -1,6 +1,5 @@
 const CURRENCY_LOCALES: Record<string, string> = {
   BRL: 'pt-BR',
-  EUR: 'pt-BR',
   USD: 'en-US',
   GBP: 'en-GB',
 }

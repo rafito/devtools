@@ -1,11 +1,10 @@
 export function groupBy<T>(array: T[], keyFn: (item: T) => string): Record<string, T[]> {
-  return array.reduce(
-    (acc, item) => {
-      const key = keyFn(item)
-      return { ...acc, [key]: [...(acc[key] ?? []), item] }
-    },
-    {} as Record<string, T[]>,
-  )
+  const result: Record<string, T[]> = {}
+  for (const item of array) {
+    const key = keyFn(item)
+    ;(result[key] ??= []).push(item)
+  }
+  return result
 }
 
 export function chunk<T>(array: T[], size: number): T[][] {
