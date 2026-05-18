@@ -22,9 +22,7 @@ export function checkPreflight(): void {
 
   if (!hasCredentials) {
     console.error('Error: AWS credentials not configured.')
-    console.error(
-      'Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or configure ~/.aws/credentials',
-    )
+    console.error('Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or configure ~/.aws/credentials')
     process.exit(1)
   }
 }
@@ -38,7 +36,7 @@ const secretsCmd = program.command('secrets').description('Manage secrets via AW
 secretsCmd
   .command('push')
   .description('Push .env variables to AWS Parameter Store')
-  .requiredOption('--env <file>', '.env file to push', '.env')
+  .option('--env <file>', '.env file to push', '.env')
   .requiredOption('--service <name>', 'Chamber service name')
   .requiredOption('--env-name <name>', 'Environment name (e.g. staging, production)')
   .option('--dry-run', 'Show what would be pushed without writing', false)

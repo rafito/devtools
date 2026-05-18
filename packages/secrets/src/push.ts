@@ -37,5 +37,7 @@ export async function push(options: PushOptions): Promise<void> {
     }
   }
 
-  console.log(`✓ ${dryRun ? '[dry-run] ' : ''}Pushed ${entries.length} variables to ${service}/${envName}`)
+  console.log(
+    `✓ ${dryRun ? '[dry-run] ' : ''}Pushed ${entries.length} variables to ${service}/${envName}`
+  )
 }

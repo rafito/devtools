@@ -23,7 +23,11 @@ describe('pull', () => {
 
   it('escreve o output do chamber no arquivo de destino', async () => {
     await pull({ service: 'app', envName: 'staging', output: '.env.staging' })
-    expect(writeFileSync).toHaveBeenCalledWith('.env.staging', 'KEY1=value1\nKEY2=value2\n', 'utf-8')
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '.env.staging',
+      'KEY1=value1\nKEY2=value2\n',
+      'utf-8'
+    )
   })
 
   it('não escreve o arquivo em dry-run', async () => {
