@@ -2,7 +2,8 @@ export function groupBy<T>(array: T[], keyFn: (item: T) => string): Record<strin
   const result: Record<string, T[]> = {}
   for (const item of array) {
     const key = keyFn(item)
-    ;(result[key] ??= []).push(item)
+    if (result[key] === undefined) result[key] = []
+    result[key].push(item)
   }
   return result
 }

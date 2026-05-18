@@ -1,6 +1,7 @@
 {
   "name": "devtools",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "build": "turbo build",
     "test": "turbo test",
