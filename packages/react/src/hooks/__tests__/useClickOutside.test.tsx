@@ -8,7 +8,9 @@ function TestComponent({ onClickOutside }: { onClickOutside: () => void }) {
   useClickOutside(ref, onClickOutside)
   return (
     <div>
-      <div ref={ref} data-testid="inside">inside</div>
+      <div ref={ref} data-testid="inside">
+        inside
+      </div>
       <div data-testid="outside">outside</div>
     </div>
   )
@@ -27,5 +29,33 @@ describe('useClickOutside', () => {
     render(<TestComponent onClickOutside={handler} />)
     fireEvent.mouseDown(screen.getByTestId('outside'))
     expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('não registra múltiplos listeners quando handler muda', () => {
+    let callCount = 0
+    const { rerender } = render(
+      <TestComponent
+        onClickOutside={() => {
+          callCount++
+        }}
+      />
+    )
+    // re-render with new handler reference (simulates inline arrow)
+    rerender(
+      <TestComponent
+        onClickOutside={() => {
+          callCount++
+        }}
+      />
+    )
+    rerender(
+      <TestComponent
+        onClickOutside={() => {
+          callCount++
+        }}
+      />
+    )
+    fireEvent.mouseDown(screen.getByTestId('outside'))
+    expect(callCount).toBe(1)
   })
 })

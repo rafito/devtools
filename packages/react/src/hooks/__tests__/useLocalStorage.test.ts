@@ -12,7 +12,9 @@ describe('useLocalStorage', () => {
 
   it('persiste o valor no localStorage', () => {
     const { result } = renderHook(() => useLocalStorage('key', 'default'))
-    act(() => { result.current[1]('novo valor') })
+    act(() => {
+      result.current[1]('novo valor')
+    })
     expect(result.current[0]).toBe('novo valor')
     expect(localStorage.getItem('key')).toBe('"novo valor"')
   })
@@ -25,15 +27,17 @@ describe('useLocalStorage', () => {
 
   it('aceita função updater', () => {
     const { result } = renderHook(() => useLocalStorage('count', 0))
-    act(() => { result.current[1]((prev) => prev + 1) })
+    act(() => {
+      result.current[1]((prev) => prev + 1)
+    })
     expect(result.current[0]).toBe(1)
   })
 
   it('funciona com objetos', () => {
-    const { result } = renderHook(() =>
-      useLocalStorage<{ name: string }>('user', { name: '' }),
-    )
-    act(() => { result.current[1]({ name: 'Alice' }) })
+    const { result } = renderHook(() => useLocalStorage<{ name: string }>('user', { name: '' }))
+    act(() => {
+      result.current[1]({ name: 'Alice' })
+    })
     expect(result.current[0]).toEqual({ name: 'Alice' })
   })
 })

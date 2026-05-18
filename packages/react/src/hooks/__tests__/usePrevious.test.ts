@@ -9,19 +9,17 @@ describe('usePrevious', () => {
   })
 
   it('retorna o valor anterior após re-render', () => {
-    const { result, rerender } = renderHook(
-      ({ value }: { value: string }) => usePrevious(value),
-      { initialProps: { value: 'first' } },
-    )
+    const { result, rerender } = renderHook(({ value }: { value: string }) => usePrevious(value), {
+      initialProps: { value: 'first' },
+    })
     rerender({ value: 'second' })
     expect(result.current).toBe('first')
   })
 
   it('rastreia múltiplas atualizações', () => {
-    const { result, rerender } = renderHook(
-      ({ value }: { value: number }) => usePrevious(value),
-      { initialProps: { value: 1 } },
-    )
+    const { result, rerender } = renderHook(({ value }: { value: number }) => usePrevious(value), {
+      initialProps: { value: 1 },
+    })
     rerender({ value: 2 })
     expect(result.current).toBe(1)
     rerender({ value: 3 })

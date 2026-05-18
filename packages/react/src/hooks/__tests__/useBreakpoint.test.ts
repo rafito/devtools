@@ -21,7 +21,11 @@ describe('useBreakpoint', () => {
   it('atualiza ao redimensionar a janela', () => {
     const { result } = renderHook(() => useBreakpoint())
     act(() => {
-      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 768 })
+      Object.defineProperty(window, 'innerWidth', {
+        writable: true,
+        configurable: true,
+        value: 768,
+      })
       window.dispatchEvent(new Event('resize'))
     })
     expect(result.current).toBe('md')
