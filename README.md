@@ -9,6 +9,7 @@ Monorepo de ferramentas compartilhadas do ecossistema Devorama.
 | [`@devorama/utils`](./packages/utils) | 0.1.0 | Formatadores, validadores e helpers puros (zero dependências) |
 | [`@devorama/react`](./packages/react) | 0.1.0 | Hooks React reutilizáveis |
 | [`@devorama/secrets`](./packages/secrets) | 0.1.0 | CLI para push/pull de `.env` no AWS Parameter Store via `chamber` |
+| [`@devorama/autosupport`](./packages/autosupport) | 0.1.0 | Pipeline de suporte autônomo: chat, investigação, fix e review com Claude |
 
 ---
 
