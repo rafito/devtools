@@ -1,5 +1,9 @@
 export const VERSION = '0.1.0'
 
+// Headline factory
+export { createSupportPipeline } from './factory.js'
+export type { SupportPipelineConfig, SupportPipeline } from './factory.js'
+
 // Schema
 export { createSupportSchema } from './schema/index.js'
 export type { CreateSchemaOptions, SupportSchema } from './schema/index.js'

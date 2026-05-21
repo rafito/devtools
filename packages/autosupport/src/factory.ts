@@ -1,0 +1,251 @@
+import { createSupportSchema, type SupportSchema } from './schema/index.js'
+import { createGitHubClient, type GitHubClient } from './clients/github.js'
+import { createSentryClient, type SentryClient } from './clients/sentry-api.js'
+import { initSentry } from './clients/sentry-sdk.js'
+import { createSseBus, type SseBus } from './notifications/sse-bus.js'
+import { createSupportQueue, type SupportQueue } from './queue/index.js'
+import { createFilesystemTools } from './tools/filesystem.js'
+import { createLogsTool } from './tools/logs.js'
+import { createTestsTool } from './tools/tests.js'
+import { createGitTools } from './tools/git.js'
+import { createGithubTools } from './tools/github-tools.js'
+import { createSentryTool } from './tools/sentry-tools.js'
+import { createTier1Agent } from './tiers/tier1.js'
+import { createTier2Agent } from './tiers/tier2.js'
+import { createTier3Agent } from './tiers/tier3.js'
+import { createTier4Agent } from './tiers/tier4.js'
+import { createGithubWebhookHandler } from './webhooks/github.js'
+import { createSentryWebhookHandler } from './webhooks/sentry.js'
+import type { ToolBundle, UserContext } from './types.js'
+
+export type SupportPipelineConfig = {
+  db: any
+  schema?: SupportSchema
+  anthropicApiKey: string
+
+  github: {
+    token: string
+    repo: string
+    webhookSecret: string
+    autoLabel?: string
+  }
+  sentry: {
+    dsn?: string
+    apiToken: string
+    orgSlug: string
+    projectSlug: string
+    webhookSecret: string
+  }
+  queue: { connectionString: string }
+
+  // Tier 2-4 environment
+  rootDir: string
+  logFilePath?: string
+  testCommand?: {
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+    timeoutMs?: number
+  }
+  protectedPatterns?: RegExp[]
+
+  // Tier-specific overrides
+  tier1: {
+    model?: string
+    maxToolLoops?: number
+    systemPromptBuilder: (ctx: UserContext) => string
+    customTools?: ToolBundle
+  }
+  tier2?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
+  tier3?: {
+    model?: string; maxToolLoops?: number
+    systemPrompt?: string; branchPrefix?: string
+  }
+  tier4?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
+}
+
+export type SupportPipeline = {
+  schema: SupportSchema
+  tier1: ReturnType<typeof createTier1Agent>
+  tier2: ReturnType<typeof createTier2Agent>
+  tier3: ReturnType<typeof createTier3Agent>
+  tier4: ReturnType<typeof createTier4Agent>
+  queue: SupportQueue
+  sseBus: SseBus
+  webhooks: {
+    github: ReturnType<typeof createGithubWebhookHandler>
+    sentry: ReturnType<typeof createSentryWebhookHandler>
+  }
+  clients: {
+    github: GitHubClient
+    sentry: SentryClient
+  }
+}
+
+function mergeBundles(bundles: ToolBundle[]): ToolBundle {
+  const definitions = bundles.flatMap((b) => b.definitions)
+  const ownerOf = new Map<string, ToolBundle>()
+  for (const b of bundles) for (const d of b.definitions) ownerOf.set(d.name, b)
+  return {
+    definitions,
+    execute: (name, input) => {
+      const owner = ownerOf.get(name)
+      if (!owner) return Promise.resolve({ error: `Ferramenta desconhecida: ${name}` })
+      return owner.execute(name, input)
+    },
+  }
+}
+
+function pickBundle(bundle: ToolBundle, names: string[]): ToolBundle {
+  const set = new Set(names)
+  return {
+    definitions: bundle.definitions.filter((d) => set.has(d.name)),
+    execute: (name, input) =>
+      set.has(name)
+        ? bundle.execute(name, input)
+        : Promise.resolve({ error: `Ferramenta desconhecida: ${name}` }),
+  }
+}
+
+export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeline {
+  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
+
+  const schema = cfg.schema ?? createSupportSchema()
+
+  // Init SDK (no-op se DSN ausente)
+  initSentry({ dsn: cfg.sentry.dsn })
+
+  // Clients
+  const githubClient = createGitHubClient({
+    token: cfg.github.token,
+    repo: cfg.github.repo,
+  })
+  const sentryClient = createSentryClient({
+    apiToken: cfg.sentry.apiToken,
+    orgSlug: cfg.sentry.orgSlug,
+    projectSlug: cfg.sentry.projectSlug,
+  })
+
+  // SSE bus
+  const sseBus = createSseBus()
+
+  // Tool primitives
+  const fsTools = createFilesystemTools({
+    rootDir: cfg.rootDir,
+    protectedPatterns: cfg.protectedPatterns,
+  })
+  const logsTool = createLogsTool({
+    logFilePath: cfg.logFilePath ?? `${cfg.rootDir}/logs/server.log`,
+  })
+  const testsTool = createTestsTool({
+    command: cfg.testCommand?.command ?? 'npx',
+    args: cfg.testCommand?.args ?? ['vitest', 'run', '--reporter=verbose'],
+    env: cfg.testCommand?.env,
+    cwd: cfg.testCommand?.cwd ?? cfg.rootDir,
+    timeoutMs: cfg.testCommand?.timeoutMs,
+  })
+  const gitTools = createGitTools({
+    token: cfg.github.token,
+    repo: cfg.github.repo,
+    rootDir: cfg.rootDir,
+  })
+  const ghTools = createGithubTools({
+    client: githubClient,
+    autoLabel: cfg.github.autoLabel,
+  })
+  const sentryToolBundle = createSentryTool(sentryClient)
+
+  // Bundles compostos por tier
+  const tier2Tools = mergeBundles([
+    fsTools,
+    logsTool,
+    sentryToolBundle,
+    pickBundle(ghTools, ['create_github_issue']),
+  ])
+  const tier3Tools = mergeBundles([
+    fsTools,
+    logsTool,
+    testsTool,
+    gitTools,
+    pickBundle(ghTools, ['create_pr']),
+  ])
+  const tier4Tools = pickBundle(ghTools, [
+    'read_pr', 'read_pr_files', 'approve_pr', 'merge_pr', 'post_review_comment',
+  ])
+
+  // Queue declarado antes dos agents (late-binding via closure)
+  let queue: SupportQueue
+
+  // Agents
+  const tier2 = createTier2Agent({
+    anthropicApiKey: cfg.anthropicApiKey,
+    model: cfg.tier2?.model,
+    maxToolLoops: cfg.tier2?.maxToolLoops,
+    systemPrompt: cfg.tier2?.systemPrompt,
+    db: cfg.db,
+    schema,
+    tools: tier2Tools,
+    enqueueTier3: (id) => queue.enqueueTier3(id),
+  })
+  const tier3 = createTier3Agent({
+    anthropicApiKey: cfg.anthropicApiKey,
+    model: cfg.tier3?.model,
+    maxToolLoops: cfg.tier3?.maxToolLoops,
+    systemPrompt: cfg.tier3?.systemPrompt,
+    branchPrefix: cfg.tier3?.branchPrefix,
+    db: cfg.db,
+    schema,
+    tools: tier3Tools,
+  })
+  const tier4 = createTier4Agent({
+    anthropicApiKey: cfg.anthropicApiKey,
+    model: cfg.tier4?.model,
+    maxToolLoops: cfg.tier4?.maxToolLoops,
+    systemPrompt: cfg.tier4?.systemPrompt,
+    db: cfg.db,
+    schema,
+    tools: tier4Tools,
+  })
+
+  const tier1 = createTier1Agent({
+    anthropicApiKey: cfg.anthropicApiKey,
+    model: cfg.tier1.model,
+    maxToolLoops: cfg.tier1.maxToolLoops,
+    systemPromptBuilder: cfg.tier1.systemPromptBuilder,
+    customTools: cfg.tier1.customTools,
+    db: cfg.db,
+    schema,
+  })
+
+  // Queue wired after agents (needs agent runners)
+  queue = createSupportQueue({
+    connectionString: cfg.queue.connectionString,
+    runners: {
+      tier2: (id) => tier2.run(id),
+      tier3: (id) => tier3.run(id),
+      tier4: (pr, id) => tier4.run(pr, id),
+    },
+  })
+
+  // Webhooks
+  const webhooks = {
+    github: createGithubWebhookHandler({
+      db: cfg.db, schema, queue, sseBus, githubClient,
+      webhookSecret: cfg.github.webhookSecret,
+      autoLabel: cfg.github.autoLabel,
+    }),
+    sentry: createSentryWebhookHandler({
+      db: cfg.db, schema, queue,
+      webhookSecret: cfg.sentry.webhookSecret,
+      projectSlug: cfg.sentry.projectSlug,
+    }),
+  }
+
+  return {
+    schema,
+    tier1, tier2, tier3, tier4,
+    queue, sseBus, webhooks,
+    clients: { github: githubClient, sentry: sentryClient },
+  }
+}
