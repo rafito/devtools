@@ -48,4 +48,14 @@ describe('createSentryTool', () => {
     const r = await t.execute('unknown', {}) as any
     expect(r.error).toContain('desconhecida')
   })
+
+  it('erro inesperado do client retorna { error } sanitizado', async () => {
+    const c = mockClient()
+    c.getIssue = vi.fn().mockRejectedValue(new Error('Sentry SDK crashed'))
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const t = createSentryTool(c)
+    const r = await t.execute('query_sentry', { issueId: 'abc' }) as any
+    expect(r.error).toContain('crashed')
+    consoleSpy.mockRestore()
+  })
 })

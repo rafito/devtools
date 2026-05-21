@@ -21,8 +21,13 @@ export function createSentryTool(client: SentryClient): ToolBundle {
     const issueId = input.issueId as string | undefined
     const query = input.query as string | undefined
     if (!issueId && !query) return { error: 'issueId ou query obrigatório' }
-    if (issueId) return client.getIssue(issueId)
-    return client.searchIssues(query!)
+    try {
+      if (issueId) return await client.getIssue(issueId)
+      return await client.searchIssues(query!)
+    } catch (err: any) {
+      console.error('[autosupport-sentry-tools]', err)
+      return { error: err.message }
+    }
   }
 
   return { definitions, execute }
