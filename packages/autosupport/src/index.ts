@@ -49,3 +49,9 @@ export type { GitToolsConfig } from './tools/git.js'
 export { createGithubTools } from './tools/github-tools.js'
 export type { GithubToolsConfig } from './tools/github-tools.js'
 export { createSentryTool } from './tools/sentry-tools.js'
+
+// Webhooks
+export { createGithubWebhookHandler } from './webhooks/github.js'
+export type { GithubWebhookDeps } from './webhooks/github.js'
+export { createSentryWebhookHandler } from './webhooks/sentry.js'
+export type { SentryWebhookDeps } from './webhooks/sentry.js'
