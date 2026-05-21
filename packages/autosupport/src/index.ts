@@ -44,3 +44,8 @@ export { createTestsTool } from './tools/tests.js'
 export type { TestsToolConfig } from './tools/tests.js'
 export { createGitTools } from './tools/git.js'
 export type { GitToolsConfig } from './tools/git.js'
+
+// Tools (bundles)
+export { createGithubTools } from './tools/github-tools.js'
+export type { GithubToolsConfig } from './tools/github-tools.js'
+export { createSentryTool } from './tools/sentry-tools.js'
