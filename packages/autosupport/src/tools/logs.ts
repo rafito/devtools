@@ -37,7 +37,8 @@ export function createLogsTool(cfg: LogsToolConfig): ToolBundle {
         ? stdout.split('\n').filter((l) => l.includes(filter)).join('\n')
         : stdout
       return { logs: result.slice(0, 6000) }
-    } catch {
+    } catch (err) {
+      console.error('[autosupport-logs]', err)
       return { logs: '(arquivo de log não disponível)' }
     }
   }

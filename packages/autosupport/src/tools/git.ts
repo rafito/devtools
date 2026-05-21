@@ -63,7 +63,11 @@ export function createGitTools(cfg: GitToolsConfig): ToolBundle {
         default:
           return { error: `Ferramenta desconhecida: ${name}` }
       }
-    } catch (err: any) { return { error: err.message } }
+    } catch (err: any) {
+      const sanitized = (err.message ?? '').split(cfg.token).join('***')
+      console.error('[autosupport-git]', sanitized)
+      return { error: sanitized }
+    }
   }
 
   return { definitions, execute }

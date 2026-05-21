@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createGitTools } from '../../src/tools/git'
 
 describe('createGitTools', () => {
@@ -19,5 +19,30 @@ describe('createGitTools', () => {
     const t = createGitTools({ token: 't', repo: 'o/r', rootDir: '/tmp' })
     const r = await t.execute('inexistente', {}) as any
     expect(r.error).toContain('desconhecida')
+  })
+
+  it('sanitiza token no erro', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const t = createGitTools({ token: 'secret-tok', repo: 'o/r', rootDir: '/tmp/nonexistent-xyz' })
+      const r = await t.execute('git_branch', { name: 'feat/x' }) as any
+      expect(r.error).toBeDefined()
+      expect(r.error).not.toContain('secret-tok')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('sanitiza token mesmo se a mensagem o contiver', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const t = createGitTools({ token: 'secret-tok', repo: 'o/r', rootDir: '/' })
+      const r = await t.execute('git_commit_push', {
+        files: ['nonexistent'], message: 'x', branch: 'main',
+      }) as any
+      if (r.error) expect(r.error).not.toContain('secret-tok')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

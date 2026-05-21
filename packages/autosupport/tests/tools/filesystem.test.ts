@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -22,9 +22,14 @@ describe('createFilesystemTools', () => {
   })
 
   it('read_file rejeita path fora do rootDir', async () => {
-    const t = createFilesystemTools({ rootDir: tmpRoot })
-    const r = await t.execute('read_file', { path: '../etc/passwd' }) as any
-    expect(r.error).toBeDefined()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const t = createFilesystemTools({ rootDir: tmpRoot })
+      const r = await t.execute('read_file', { path: '../etc/passwd' }) as any
+      expect(r.error).toBeDefined()
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('search_code encontra match', async () => {

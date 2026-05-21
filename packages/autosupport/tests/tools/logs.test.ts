@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -36,9 +36,14 @@ describe('createLogsTool', () => {
   })
 
   it('read_logs retorna mensagem graciosa se arquivo não existe', async () => {
-    const t = createLogsTool({ logFilePath: '/tmp/__definitely_does_not_exist__.log' })
-    const r = await t.execute('read_logs', {}) as any
-    expect(r.logs).toContain('não disponível')
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const t = createLogsTool({ logFilePath: '/tmp/__definitely_does_not_exist__.log' })
+      const r = await t.execute('read_logs', {}) as any
+      expect(r.logs).toContain('não disponível')
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('logFilePath vazio lança', () => {

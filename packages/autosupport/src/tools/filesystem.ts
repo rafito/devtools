@@ -69,7 +69,10 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
           const resolved = safeResolvePath(input.path as string)
           const content = await fs.readFile(resolved, 'utf8')
           return { content: content.slice(0, 8000) }
-        } catch (err: any) { return { error: err.message } }
+        } catch (err: any) {
+          console.error('[autosupport-fs]', err)
+          return { error: err.message }
+        }
       }
       case 'search_code': {
         try {
@@ -80,6 +83,7 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
           return { matches: stdout.slice(0, 4000) }
         } catch (err: any) {
           if (err.code === 1) return { matches: '(nenhum resultado)' }
+          console.error('[autosupport-fs]', err)
           return { error: err.message }
         }
       }
@@ -91,7 +95,10 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
           await fs.mkdir(path.dirname(resolved), { recursive: true })
           await fs.writeFile(resolved, input.content as string, 'utf8')
           return { success: true }
-        } catch (err: any) { return { error: err.message } }
+        } catch (err: any) {
+          console.error('[autosupport-fs]', err)
+          return { error: err.message }
+        }
       }
       default: return { error: `Ferramenta desconhecida: ${name}` }
     }
