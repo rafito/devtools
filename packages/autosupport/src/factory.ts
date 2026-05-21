@@ -1,7 +1,6 @@
 import { createSupportSchema, type SupportSchema } from './schema/index.js'
 import { createGitHubClient, type GitHubClient } from './clients/github.js'
 import { createSentryClient, type SentryClient } from './clients/sentry-api.js'
-import { initSentry } from './clients/sentry-sdk.js'
 import { createSseBus, type SseBus } from './notifications/sse-bus.js'
 import { createSupportQueue, type SupportQueue } from './queue/index.js'
 import { createFilesystemTools } from './tools/filesystem.js'
@@ -30,7 +29,6 @@ export type SupportPipelineConfig = {
     autoLabel?: string
   }
   sentry: {
-    dsn?: string
     apiToken: string
     orgSlug: string
     projectSlug: string
@@ -61,6 +59,7 @@ export type SupportPipelineConfig = {
   tier3?: {
     model?: string; maxToolLoops?: number
     systemPrompt?: string; branchPrefix?: string
+    defaultBranch?: string
   }
   tier4?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
 }
@@ -113,8 +112,8 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
 
   const schema = cfg.schema ?? createSupportSchema()
 
-  // Init SDK (no-op se DSN ausente)
-  initSentry({ dsn: cfg.sentry.dsn })
+  // Nota: initSentry NÃO é chamado aqui. O consumer deve chamar initSentry({ dsn })
+  // antes de qualquer import que use Express, no topo do entry point. Ver README.
 
   // Clients
   const githubClient = createGitHubClient({
@@ -144,13 +143,17 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   const logsTool = createLogsTool({
     logFilePath: cfg.logFilePath ?? `${cfg.rootDir}/logs/server.log`,
   })
-  const testsTool = createTestsTool({
-    command: cfg.testCommand?.command ?? 'npx',
-    args: cfg.testCommand?.args ?? ['vitest', 'run', '--reporter=verbose'],
-    env: cfg.testCommand?.env,
-    cwd: cfg.testCommand?.cwd ?? cfg.rootDir,
-    timeoutMs: cfg.testCommand?.timeoutMs,
-  })
+  // testsTool é opt-in: só registrado quando o consumer fornece cfg.testCommand.
+  // Em produção, Tier 3 não roda testes — o CI valida no PR (Tier 4 só fecha o ciclo após CI verde).
+  const testsTool = cfg.testCommand
+    ? createTestsTool({
+        command: cfg.testCommand.command ?? 'npx',
+        args: cfg.testCommand.args ?? ['vitest', 'run', '--reporter=verbose'],
+        env: cfg.testCommand.env,
+        cwd: cfg.testCommand.cwd ?? cfg.rootDir,
+        timeoutMs: cfg.testCommand.timeoutMs,
+      })
+    : null
   const gitTools = createGitTools({
     token: cfg.github.token,
     repo: cfg.github.repo,
@@ -172,7 +175,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   const tier3Tools = mergeBundles([
     fsTools,
     logsTool,
-    testsTool,
+    ...(testsTool ? [testsTool] : []),
     gitTools,
     pickBundle(ghTools, ['create_pr']),
   ])
@@ -200,6 +203,9 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     maxToolLoops: cfg.tier3?.maxToolLoops,
     systemPrompt: cfg.tier3?.systemPrompt,
     branchPrefix: cfg.tier3?.branchPrefix,
+    defaultBranch: cfg.tier3?.defaultBranch,
+    rootDir: cfg.rootDir,
+    githubClient,
     db: cfg.db,
     schema,
     tools: tier3Tools,

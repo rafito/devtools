@@ -1,8 +1,13 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
+import type { GitHubClient } from '../clients/github.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { ToolBundle } from '../types.js'
 import { runToolLoop } from './runner.js'
+
+const execFileAsync = promisify(execFile)
 
 export type Tier3Config = {
   anthropicApiKey: string
@@ -13,6 +18,12 @@ export type Tier3Config = {
   db: any
   schema: SupportSchema
   tools: ToolBundle
+  /** Cliente GitHub usado para postar comentário na issue quando Tier 3 falha. */
+  githubClient?: GitHubClient
+  /** Branch default usado para checkout no cleanup pós-falha. Default: 'main'. */
+  defaultBranch?: string
+  /** Raiz do repo onde rodar git cleanup. Se ausente, cleanup é pulado. */
+  rootDir?: string
 }
 
 const DEFAULT_SYSTEM = (branchPrefix: string) =>
@@ -20,14 +31,36 @@ const DEFAULT_SYSTEM = (branchPrefix: string) =>
 
 1. Explorar o código com read_file / search_code
 2. Criar branch com git_branch (nome: "${branchPrefix}{ticketId[:8]}")
-3. Escrever o fix com write_file
-4. Rodar testes com run_tests — se falharem, iterar (máx 3 ciclos write→test)
-5. Se passarem: git_commit_push e create_pr
-6. Se 3 ciclos falharem: pare e informe que não conseguiu
+3. Escrever o fix com write_file (Tier 3 pode escrever também testes novos)
+4. git_commit_push (não rode testes localmente — CI valida no PR)
+5. create_pr com label "support-auto"
 
-O PR deve ter título "[Support] fix: <descrição>" e body com "Closes #{issueNumber}" + diagnóstico + explicação.
+Não rode testes localmente. Faça o fix, commit, push, abra o PR — o CI no GitHub valida. Tier 4 só vai aprovar quando o CI passar.
+
+Se você não consegue identificar o fix em algumas iterações, pare. A próxima ação será Tier 4 revisando o PR (se CI passar) ou um humano (se você não criar PR ou se Tier 4 bloquear).
+
+O PR deve ter título "[Support] fix: <descrição>" e body com "Closes #{issueNumber}" + diagnóstico do Tier 2 + explicação do fix.
 
 Nunca escreva em arquivos protegidos (a tool write_file rejeita).`
+
+export async function cleanupTier3Failure(
+  rootDir: string,
+  branchName: string | undefined,
+  defaultBranch: string,
+): Promise<void> {
+  const ops: [string, string[]][] = [
+    ['git', ['checkout', defaultBranch]],
+    ...(branchName ? [['git', ['branch', '-D', branchName]] as [string, string[]]] : []),
+    ['git', ['restore', '.']],
+  ]
+  for (const [cmd, args] of ops) {
+    try {
+      await execFileAsync(cmd, args, { cwd: rootDir })
+    } catch (err: any) {
+      console.warn(`[autosupport-tier3-cleanup] ${cmd} ${args.join(' ')} failed: ${err.message}`)
+    }
+  }
+}
 
 export function createTier3Agent(cfg: Tier3Config) {
   if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
@@ -43,10 +76,13 @@ export function createTier3Agent(cfg: Tier3Config) {
     if (ticket.githubPrId) return // idempotência
 
     let prNumber: number | undefined
+    const writtenFiles: string[] = []
+    const branchesCreated: string[] = []
+
     const initial = [
       {
         role: 'user' as const,
-        content: `Ticket ID: ${ticketId}\nGitHub Issue: #${ticket.githubIssueId}\n\nDescrição:\n${ticket.description}\n\nInvestigue, aplique o fix, rode os testes e crie o PR. Branch sugerida: ${branchPrefix}${ticketId.slice(0, 8)}`,
+        content: `Ticket ID: ${ticketId}\nGitHub Issue: #${ticket.githubIssueId}\n\nDescrição:\n${ticket.description}\n\nInvestigue, aplique o fix e crie o PR. Branch sugerida: ${branchPrefix}${ticketId.slice(0, 8)}`,
       },
     ]
 
@@ -57,9 +93,17 @@ export function createTier3Agent(cfg: Tier3Config) {
       maxToolLoops: cfg.maxToolLoops ?? 12,
       initialMessages: initial,
       tools: cfg.tools,
-      onToolResult: (name, _input, result) => {
-        if (name === 'create_pr' && (result as any).prNumber) {
+      onToolResult: (name, input, result) => {
+        if (name === 'create_pr' && (result as any)?.prNumber) {
           prNumber = (result as any).prNumber
+        }
+        if (name === 'write_file' && (result as any)?.success) {
+          const path = (input as any)?.path
+          if (typeof path === 'string') writtenFiles.push(path)
+        }
+        if (name === 'git_branch' && (result as any)?.success) {
+          const branchName = (input as any)?.name
+          if (typeof branchName === 'string') branchesCreated.push(branchName)
         }
       },
     })
@@ -69,12 +113,41 @@ export function createTier3Agent(cfg: Tier3Config) {
         .update(cfg.schema.supportTickets)
         .set({ status: 'fixing', githubPrId: prNumber, updatedAt: new Date() })
         .where(eq(cfg.schema.supportTickets.id, ticketId))
-    } else {
-      await cfg.db
-        .update(cfg.schema.supportTickets)
-        .set({ status: 'investigating', updatedAt: new Date() })
-        .where(eq(cfg.schema.supportTickets.id, ticketId))
+      return
     }
+
+    // Caminho de falha: nenhum PR criado.
+    // 1) Posta comentário na issue resumindo o que foi tentado.
+    if (cfg.githubClient && ticket.githubIssueId) {
+      try {
+        const lines = [
+          'Tier 3 não conseguiu criar um PR autonomamente. Requer revisão humana.',
+          '',
+          writtenFiles.length
+            ? `**Arquivos modificados:** ${writtenFiles.join(', ')}`
+            : null,
+          branchesCreated.length
+            ? `**Branch tentada:** ${branchesCreated[0]} (deletada após cleanup)`
+            : null,
+          '',
+          'Reabra ou comente para reenfileirar Tier 3.',
+        ].filter((l): l is string => l !== null)
+        await cfg.githubClient.postIssueComment(ticket.githubIssueId, lines.join('\n'))
+      } catch (err: any) {
+        console.warn('[autosupport-tier3] failed to post failure comment:', err?.message ?? err)
+      }
+    }
+
+    // 2) Cleanup: volta para defaultBranch, deleta branch criada, restaura working tree.
+    if (cfg.rootDir) {
+      await cleanupTier3Failure(cfg.rootDir, branchesCreated[0], cfg.defaultBranch ?? 'main')
+    }
+
+    // 3) Atualiza status do ticket.
+    await cfg.db
+      .update(cfg.schema.supportTickets)
+      .set({ status: 'investigating', updatedAt: new Date() })
+      .where(eq(cfg.schema.supportTickets.id, ticketId))
   }
 
   return { run }

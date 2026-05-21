@@ -10,6 +10,23 @@ pnpm add @devorama/autosupport
 pnpm add @anthropic-ai/sdk @sentry/node drizzle-orm express pg-boss
 ```
 
+## Sentry Init Order
+
+Para que a auto-instrumentação do Sentry no Express funcione, `initSentry` PRECISA ser chamado ANTES de qualquer import que use Express. Coloque isso no TOPO do entry point:
+
+```ts
+// server/index.ts (ou onde for seu entry)
+import { initSentry } from '@devorama/autosupport'
+initSentry({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV })
+
+// SÓ DEPOIS de initSentry, importe o resto:
+import express from 'express'
+import { support } from './lib/autosupport'
+// ...
+```
+
+`createSupportPipeline` não chama mais `initSentry` internamente (era impossível garantir ordem correta com Express). O `dsn` foi removido do bloco `sentry` da config — passe direto pro `initSentry`.
+
 ## Uso básico
 
 ```ts
@@ -27,7 +44,6 @@ const support = createSupportPipeline({
     webhookSecret: process.env.GITHUB_WEBHOOK_SECRET!,
   },
   sentry: {
-    dsn: process.env.SENTRY_DSN,
     apiToken: process.env.SENTRY_API_TOKEN!,
     orgSlug: 'my-org',
     projectSlug: 'my-product',
@@ -39,6 +55,10 @@ const support = createSupportPipeline({
     systemPromptBuilder: meuPromptDoTier1,
     customTools: domainTools,
   },
+  // testCommand é OPT-IN. Por padrão Tier 3 não roda testes localmente — o CI
+  // valida no PR (mais seguro: evita executar testes contra o DB de produção).
+  // Habilite apenas em ambientes de dev/sandbox:
+  // testCommand: { command: 'pnpm', args: ['test'] },
 })
 
 // API REST

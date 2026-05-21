@@ -61,6 +61,26 @@ describe('createGitHubClient', () => {
     expect(body.base).toBe('main')
   })
 
+  it('postIssueComment chama POST /issues/{n}/comments com body', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 999 }),
+    })
+    const gh = createGitHubClient({ token: 't', repo: 'o/r' })
+    const r = await gh.postIssueComment(42, 'Tier 3 falhou')
+    expect(r.id).toBe(999)
+    const [url, init] = mockFetch.mock.calls[0]
+    expect(url).toBe('https://api.github.com/repos/o/r/issues/42/comments')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body).body).toBe('Tier 3 falhou')
+  })
+
+  it('postIssueComment propaga erro de API', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => 'not found' })
+    const gh = createGitHubClient({ token: 't', repo: 'o/r' })
+    await expect(gh.postIssueComment(1, 'x')).rejects.toThrow(/404/)
+  })
+
   it('mergePullRequest faz PUT /merge com squash', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

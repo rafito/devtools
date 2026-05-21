@@ -120,6 +120,19 @@ export function createGitHubClient(config: { token: string; repo: string }) {
     return response.json() as Promise<GitHubMergeResult>
   }
 
+  async function postIssueComment(issueNumber: number, body: string): Promise<{ id: number }> {
+    const response = await fetch(`${base}/issues/${issueNumber}/comments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ body }),
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`GitHub API error ${response.status}: ${text}`)
+    }
+    return response.json() as Promise<{ id: number }>
+  }
+
   async function postPullRequestComment(prNumber: number, comment: string): Promise<GitHubReview> {
     const response = await fetch(`${base}/pulls/${prNumber}/reviews`, {
       method: 'POST',
@@ -170,6 +183,7 @@ export function createGitHubClient(config: { token: string; repo: string }) {
     getPullRequestFiles,
     approvePullRequest,
     mergePullRequest,
+    postIssueComment,
     postPullRequestComment,
     createPullRequest,
     addLabelsToPR,
