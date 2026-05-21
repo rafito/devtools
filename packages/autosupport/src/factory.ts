@@ -121,11 +121,17 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     token: cfg.github.token,
     repo: cfg.github.repo,
   })
-  const sentryClient = createSentryClient({
-    apiToken: cfg.sentry.apiToken,
-    orgSlug: cfg.sentry.orgSlug,
-    projectSlug: cfg.sentry.projectSlug,
-  })
+  const sentryApiConfigured = Boolean(cfg.sentry.apiToken && cfg.sentry.orgSlug && cfg.sentry.projectSlug)
+  const sentryClient: SentryClient = sentryApiConfigured
+    ? createSentryClient({
+        apiToken: cfg.sentry.apiToken,
+        orgSlug: cfg.sentry.orgSlug,
+        projectSlug: cfg.sentry.projectSlug,
+      })
+    : {
+        getIssue: async () => ({ error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)' }),
+        searchIssues: async () => ({ error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)' }),
+      }
 
   // SSE bus
   const sseBus = createSseBus()
@@ -228,18 +234,23 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     },
   })
 
-  // Webhooks
+  // Webhooks. Sentry handler só é criado se webhookSecret + projectSlug presentes.
+  const sentryWebhookConfigured = Boolean(cfg.sentry.webhookSecret && cfg.sentry.projectSlug)
   const webhooks = {
     github: createGithubWebhookHandler({
       db: cfg.db, schema, queue, sseBus, githubClient,
       webhookSecret: cfg.github.webhookSecret,
       autoLabel: cfg.github.autoLabel,
     }),
-    sentry: createSentryWebhookHandler({
-      db: cfg.db, schema, queue,
-      webhookSecret: cfg.sentry.webhookSecret,
-      projectSlug: cfg.sentry.projectSlug,
-    }),
+    sentry: sentryWebhookConfigured
+      ? createSentryWebhookHandler({
+          db: cfg.db, schema, queue,
+          webhookSecret: cfg.sentry.webhookSecret,
+          projectSlug: cfg.sentry.projectSlug,
+        })
+      : (async (_req: any, res: any) => res.status(503).json({
+          error: 'Sentry webhook não configurado (webhookSecret ausente)',
+        })) as ReturnType<typeof createSentryWebhookHandler>,
   }
 
   return {
