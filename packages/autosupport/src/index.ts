@@ -34,3 +34,13 @@ export type { SseBus, SseListener } from './notifications/sse-bus.js'
 // Queue
 export { createSupportQueue } from './queue/index.js'
 export type { SupportQueue, CreateQueueOptions, SupportQueueRunners } from './queue/index.js'
+
+// Tools (primitives)
+export { createFilesystemTools } from './tools/filesystem.js'
+export type { FilesystemToolsConfig } from './tools/filesystem.js'
+export { createLogsTool } from './tools/logs.js'
+export type { LogsToolConfig } from './tools/logs.js'
+export { createTestsTool } from './tools/tests.js'
+export type { TestsToolConfig } from './tools/tests.js'
+export { createGitTools } from './tools/git.js'
+export type { GitToolsConfig } from './tools/git.js'
