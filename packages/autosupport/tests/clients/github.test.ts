@@ -26,6 +26,11 @@ describe('createGitHubClient', () => {
       .toThrow(/owner\/repo/)
   })
 
+  it('throw com token vazio', () => {
+    expect(() => createGitHubClient({ token: '', repo: 'o/r' }))
+      .toThrow(/GITHUB_TOKEN/)
+  })
+
   it('createIssue propaga erro de API', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 422, text: async () => 'bad' })
     const gh = createGitHubClient({ token: 't', repo: 'o/r' })

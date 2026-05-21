@@ -40,6 +40,10 @@ export function createGitHubClient(config: { token: string; repo: string }) {
     throw new Error("GITHUB_REPO inválido — use formato 'owner/repo'")
   }
 
+  if (!config.token) {
+    throw new Error('GITHUB_TOKEN não configurado')
+  }
+
   const headers = {
     Authorization: `Bearer ${config.token}`,
     Accept: 'application/vnd.github+json',
@@ -133,12 +137,12 @@ export function createGitHubClient(config: { token: string; repo: string }) {
     title: string,
     body: string,
     branch: string,
-    base_branch = 'main',
+    baseBranch = 'main',
   ): Promise<{ number: number; html_url: string; title: string }> {
     const response = await fetch(`${base}/pulls`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ title, body, head: branch, base: base_branch, draft: false }),
+      body: JSON.stringify({ title, body, head: branch, base: baseBranch, draft: false }),
     })
     if (!response.ok) {
       const text = await response.text()
