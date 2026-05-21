@@ -17,3 +17,12 @@ export type {
   GitHubClient, GitHubIssue, GitHubPR, GitHubPRFile,
   GitHubReview, GitHubMergeResult,
 } from './clients/github.js'
+
+// Sentry
+export { createSentryClient } from './clients/sentry-api.js'
+export type {
+  SentryClient, SentryConfig,
+  SentryIssueResult, SentrySearchResult,
+} from './clients/sentry-api.js'
+export { initSentry, Sentry, setupExpressErrorHandler } from './clients/sentry-sdk.js'
+export type { InitSentryOptions } from './clients/sentry-sdk.js'
