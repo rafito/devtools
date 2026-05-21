@@ -30,3 +30,7 @@ export type { InitSentryOptions } from './clients/sentry-sdk.js'
 // Notifications
 export { createSseBus } from './notifications/sse-bus.js'
 export type { SseBus, SseListener } from './notifications/sse-bus.js'
+
+// Queue
+export { createSupportQueue } from './queue/index.js'
+export type { SupportQueue, CreateQueueOptions, SupportQueueRunners } from './queue/index.js'
