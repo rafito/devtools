@@ -74,7 +74,10 @@ export function createSentryClient(cfg: SentryConfig) {
 
   async function searchIssues(query: string): Promise<SentrySearchResult | { error: string }> {
     try {
-      const url = `${base}/issues/?query=${encodeURIComponent(query)}&project=${cfg.projectSlug}&limit=3`
+      // Sentry API exige project ID numérico em `&project=`. Como o pacote recebe slug,
+      // injetamos o filtro via search syntax (`project:slug`) que aceita slug.
+      const fullQuery = `${query} project:${cfg.projectSlug}`
+      const url = `${base}/issues/?query=${encodeURIComponent(fullQuery)}&limit=3`
       const res = await fetch(url, { headers })
       if (!res.ok) return { error: `Sentry API error: ${res.status}` }
       const issues = await res.json() as any[]
