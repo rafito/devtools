@@ -26,3 +26,7 @@ export type {
 } from './clients/sentry-api.js'
 export { initSentry, Sentry, setupExpressErrorHandler } from './clients/sentry-sdk.js'
 export type { InitSentryOptions } from './clients/sentry-sdk.js'
+
+// Notifications
+export { createSseBus } from './notifications/sse-bus.js'
+export type { SseBus, SseListener } from './notifications/sse-bus.js'
