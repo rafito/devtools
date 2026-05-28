@@ -58,6 +58,7 @@ secretsCmd
   .requiredOption('--service <name>', 'Chamber service name')
   .requiredOption('--env-name <name>', 'Environment name (e.g. staging, production)')
   .option('--output <file>', 'Output .env file path', '.env')
+  .option('--force', 'Overwrite the output file if it exists', false)
   .option('--dry-run', 'Show what would be written without creating the file', false)
   .option('--verbose', 'Log details', false)
   .action(async (opts) => {
@@ -66,6 +67,7 @@ secretsCmd
       service: opts.service,
       envName: opts.envName,
       output: opts.output,
+      force: opts.force,
       dryRun: opts.dryRun,
       verbose: opts.verbose,
     })
