@@ -8,6 +8,6 @@ export default defineConfig({
   sourcemap: true,
   shims: true,
   outExtension({ format }) {
-    return { js: format === 'esm' ? '.mjs' : '.js' }
+    return { js: format === 'esm' ? '.mjs' : '.cjs' }
   },
 })
