@@ -13,7 +13,12 @@ export interface PullOptions {
 export async function pull(options: PullOptions): Promise<void> {
   const { service, envName, output, force = false, dryRun = false, verbose = false } = options
 
-  const { stdout } = await execa('chamber', ['env', `${service}/${envName}`])
+  const { stdout } = await execa('chamber', [
+    'export',
+    `${service}/${envName}`,
+    '--format',
+    'dotenv',
+  ])
 
   if (verbose) console.log(`Retrieved variables from ${service}/${envName}`)
 

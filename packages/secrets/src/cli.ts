@@ -39,6 +39,10 @@ secretsCmd
   .option('--env <file>', '.env file to push', '.env')
   .requiredOption('--service <name>', 'Chamber service name')
   .requiredOption('--env-name <name>', 'Environment name (e.g. staging, production)')
+  .option(
+    '--kms-alias <alias>',
+    'KMS key alias for encryption (e.g. alias/aws/ssm in regions without customer-managed key)'
+  )
   .option('--dry-run', 'Show what would be pushed without writing', false)
   .option('--verbose', 'Log each key being processed', false)
   .action(async (opts) => {
@@ -47,6 +51,7 @@ secretsCmd
       envFile: opts.env,
       service: opts.service,
       envName: opts.envName,
+      kmsAlias: opts.kmsAlias,
       dryRun: opts.dryRun,
       verbose: opts.verbose,
     })

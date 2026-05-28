@@ -5,6 +5,7 @@ export interface PushOptions {
   envFile: string
   service: string
   envName: string
+  kmsAlias?: string
   dryRun?: boolean
   verbose?: boolean
 }
@@ -24,7 +25,7 @@ function parseEnvContent(content: string): Record<string, string> {
 }
 
 export async function push(options: PushOptions): Promise<void> {
-  const { envFile, service, envName, dryRun = false, verbose = false } = options
+  const { envFile, service, envName, kmsAlias, dryRun = false, verbose = false } = options
   const content = readFileSync(envFile, 'utf-8')
   const entries = Object.entries(parseEnvContent(content))
 
@@ -33,7 +34,12 @@ export async function push(options: PushOptions): Promise<void> {
   for (const [key, value] of entries) {
     if (verbose) console.log(`  ${dryRun ? '[dry-run] ' : ''}${key}`)
     if (!dryRun) {
-      await execa('chamber', ['write', `${service}/${envName}`, key, value])
+      const args = ['write', `${service}/${envName}`, key, value]
+      if (kmsAlias) {
+        await execa('chamber', args, { env: { CHAMBER_KMS_KEY_ALIAS: kmsAlias } })
+      } else {
+        await execa('chamber', args)
+      }
     }
   }
 

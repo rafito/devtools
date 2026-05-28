@@ -17,10 +17,10 @@ import { execa } from 'execa'
 import { pull } from '../pull'
 
 describe('pull', () => {
-  it('chama chamber env com o service correto', async () => {
+  it('chama chamber export com o service correto e formato dotenv', async () => {
     vi.mocked(existsSync).mockReturnValue(false)
     await pull({ service: 'app', envName: 'staging', output: '.env.staging' })
-    expect(execa).toHaveBeenCalledWith('chamber', ['env', 'app/staging'])
+    expect(execa).toHaveBeenCalledWith('chamber', ['export', 'app/staging', '--format', 'dotenv'])
   })
 
   it('escreve o output do chamber no arquivo de destino', async () => {

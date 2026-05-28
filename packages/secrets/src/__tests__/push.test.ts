@@ -30,4 +30,23 @@ describe('push', () => {
     await push({ envFile: '.env', service: 'app', envName: 'staging', dryRun: true })
     expect(execa).not.toHaveBeenCalled()
   })
+
+  it('propaga --kms-alias via env CHAMBER_KMS_KEY_ALIAS quando fornecido', async () => {
+    vi.mocked(execa).mockClear()
+    await push({
+      envFile: '.env',
+      service: 'app',
+      envName: 'staging',
+      kmsAlias: 'alias/aws/ssm',
+    })
+    expect(execa).toHaveBeenCalledWith('chamber', ['write', 'app/staging', 'KEY1', 'value1'], {
+      env: { CHAMBER_KMS_KEY_ALIAS: 'alias/aws/ssm' },
+    })
+  })
+
+  it('não passa options quando --kms-alias não é fornecido', async () => {
+    vi.mocked(execa).mockClear()
+    await push({ envFile: '.env', service: 'app', envName: 'staging' })
+    expect(execa).toHaveBeenCalledWith('chamber', ['write', 'app/staging', 'KEY1', 'value1'])
+  })
 })
