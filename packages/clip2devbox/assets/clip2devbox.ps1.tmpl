@@ -1,0 +1,126 @@
+# clip2devbox.ps1 -- gerado por `clip2devbox install` (NAO edite a mao; rode install de novo)
+# Pega imagem do clipboard (bitmap, arquivo copiado, ou URL de imagem),
+# envia pra devbox via scp, e troca o clipboard pelos caminhos remotos com prefixo "@".
+
+$ErrorActionPreference = 'Stop'
+
+$Host_     = '@@HOST@@'        # entrada do ~/.ssh/config
+$RemoteDir = '@@REMOTE_DIR@@'  # diretorio remoto (absoluto)
+$ImgExt    = @('.png','.jpg','.jpeg','.gif','.bmp','.webp','.tif','.tiff','.avif','.heic','.svg')
+
+function Beep-Ok   { [System.Console]::Beep(880, 120) }
+function Beep-Fail { [System.Console]::Beep(220, 250) }
+function Toast($msg) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        $n = New-Object System.Windows.Forms.NotifyIcon
+        $n.Icon = [System.Drawing.SystemIcons]::Information
+        $n.BalloonTipTitle = 'clip2devbox'
+        $n.BalloonTipText  = $msg
+        $n.Visible = $true
+        $n.ShowBalloonTip(2500)
+        Start-Sleep -Milliseconds 200
+        $n.Dispose()
+    } catch { }
+}
+
+function Ensure-RemoteDir {
+    & ssh -o BatchMode=yes -o ConnectTimeout=10 $Host_ "mkdir -p '$RemoteDir'"
+    if ($LASTEXITCODE -ne 0) { throw "ssh mkdir falhou (exit $LASTEXITCODE)" }
+}
+
+function Upload-File($localPath, $remoteName) {
+    & scp -o BatchMode=yes -o ConnectTimeout=20 -q $localPath "${Host_}:${RemoteDir}/${remoteName}"
+    if ($LASTEXITCODE -ne 0) { throw "scp falhou (exit $LASTEXITCODE)" }
+    return "$RemoteDir/$remoteName"
+}
+
+function Ext-FromContentType($ct) {
+    switch -regex ($ct) {
+        'png'        { return '.png' }
+        'jpe?g'      { return '.jpg' }
+        'gif'        { return '.gif' }
+        'webp'       { return '.webp' }
+        'bmp'        { return '.bmp' }
+        'svg'        { return '.svg' }
+        'tiff?'      { return '.tif' }
+        'avif'       { return '.avif' }
+        'heic|heif'  { return '.heic' }
+        default      { return '.img' }
+    }
+}
+
+try {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $remotes = @()
+
+    # --- caso 1: bitmap no clipboard ---
+    $img = [System.Windows.Forms.Clipboard]::GetImage()
+    if ($null -ne $img) {
+        $name = "clip-$stamp.png"
+        $tmp  = Join-Path $env:TEMP $name
+        $img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
+        Ensure-RemoteDir
+        $remotes += Upload-File $tmp $name
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+    }
+    # --- caso 2: arquivo(s) de imagem copiado(s) no Explorer ---
+    elseif ([System.Windows.Forms.Clipboard]::ContainsFileDropList()) {
+        $files = @([System.Windows.Forms.Clipboard]::GetFileDropList()) |
+                 Where-Object { $ImgExt -contains ([System.IO.Path]::GetExtension($_).ToLower()) -and (Test-Path $_) }
+        if ($files.Count -eq 0) { Beep-Fail; Toast 'Arquivo(s) copiado(s), mas nenhuma imagem reconhecida.'; exit 1 }
+        Ensure-RemoteDir
+        $i = 0
+        foreach ($f in $files) {
+            $ext  = [System.IO.Path]::GetExtension($f).ToLower()
+            $name = if ($files.Count -gt 1) { "clip-$stamp-$i$ext" } else { "clip-$stamp$ext" }
+            $remotes += Upload-File $f $name
+            $i++
+        }
+    }
+    # --- caso 3: texto que e URL de imagem ---
+    elseif ([System.Windows.Forms.Clipboard]::ContainsText()) {
+        $txt = [System.Windows.Forms.Clipboard]::GetText().Trim()
+        if ($txt -notmatch '^(https?)://\S+$') {
+            Beep-Fail; Toast 'Clipboard tem texto, mas nao e URL. Copie uma imagem.'; exit 1
+        }
+        $tmp = Join-Path $env:TEMP "clip-$stamp.download"
+        try {
+            $resp = Invoke-WebRequest -Uri $txt -OutFile $tmp -PassThru -UseBasicParsing -TimeoutSec 30
+        } catch { Beep-Fail; Toast "Download falhou: $($_.Exception.Message)"; exit 1 }
+        $ct = "$($resp.Headers['Content-Type'])"
+        if ($ct -notmatch '^image/') {
+            $urlExt = [System.IO.Path]::GetExtension(($txt -split '\?')[0]).ToLower()
+            if ($ImgExt -notcontains $urlExt) {
+                Remove-Item $tmp -ErrorAction SilentlyContinue
+                Beep-Fail; Toast "URL nao e imagem (Content-Type: $ct)."; exit 1
+            }
+            $ext = $urlExt
+        } else {
+            $ext = Ext-FromContentType $ct
+        }
+        $name  = "clip-$stamp$ext"
+        $final = Join-Path $env:TEMP $name
+        Move-Item $tmp $final -Force
+        Ensure-RemoteDir
+        $remotes += Upload-File $final $name
+        Remove-Item $final -ErrorAction SilentlyContinue
+    }
+    else {
+        Beep-Fail
+        Toast 'Sem imagem no clipboard. Tira o print (Win+Shift+S) ou copie uma imagem.'
+        exit 1
+    }
+
+    $clip = ($remotes | ForEach-Object { "@$_" }) -join ' '
+    Set-Clipboard -Value $clip
+    Beep-Ok
+    Toast "Enviado ($($remotes.Count)). Clipboard = $clip"
+    exit 0
+}
+catch {
+    Beep-Fail
+    Toast "Erro: $($_.Exception.Message)"
+    exit 1
+}
