@@ -79,7 +79,7 @@ function Upload-File($localPath, $remoteName, $showProgress) {
         } -ArgumentList $localPath, $dst
         while ($job.State -eq 'Running') {
             [System.Windows.Forms.Application]::DoEvents()
-            Start-Sleep -Milliseconds 80
+            Start-Sleep -Milliseconds 40
         }
         $code = Receive-Job $job
         Remove-Job $job -Force
@@ -172,6 +172,8 @@ if (`$latest -and (`$latest.Trim() -ne `$local)) {
 
 try {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    # Sem isto a barra Marquee aparece mas NAO anima (fica vazia ate fechar).
+    [System.Windows.Forms.Application]::EnableVisualStyles()
     $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
     $remotes = @()
 

@@ -1,6 +1,6 @@
 {
   "name": "@devorama/clip2devbox",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Envia arquivo ou print do clipboard (Windows) pra uma devbox via Tailscale/scp e troca o clipboard pelo caminho remoto com prefixo @, pronto pra colar no Claude Code/ttyd.",
   "type": "module",
   "bin": {
