@@ -116,7 +116,9 @@ export function install(opts: InstallOptions): InstallResult {
   })
   mkdirSync(installDir(), { recursive: true })
   const sp = scriptPath()
-  writeFileSync(sp, rendered, 'utf8')
+  // BOM UTF-8: o Windows PowerShell 5.1 le .ps1 sem BOM como ANSI (Windows-1252),
+  // o que corromperia qualquer caractere nao-ASCII. Com BOM ele decodifica UTF-8.
+  writeFileSync(sp, `\uFEFF${rendered}`, 'utf8')
   console.log(`✓ script: ${sp}`)
 
   // 5. hotkey

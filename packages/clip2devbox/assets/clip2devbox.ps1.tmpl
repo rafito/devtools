@@ -183,7 +183,7 @@ try {
         $img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
         Ensure-RemoteDir
         $prog = Wants-Progress $tmp
-        if ($prog) { Show-Progress "Enviando $name…" }
+        if ($prog) { Show-Progress "Enviando $name..." }
         $remotes += Upload-File $tmp $name $prog
         Remove-Item $tmp -ErrorAction SilentlyContinue
     }
@@ -204,7 +204,7 @@ try {
             }
             $name = Unique-Name (Safe-Name $f) $used
             $prog = Wants-Progress $f
-            if ($prog) { Show-Progress "Enviando ($($i + 1)/$($files.Count)) $name…" }
+            if ($prog) { Show-Progress "Enviando ($($i + 1)/$($files.Count)) $name..." }
             $remotes += Upload-File $f $name $prog
             $i++
         }
@@ -245,7 +245,7 @@ try {
         }
         Ensure-RemoteDir
         $prog = Wants-Progress $final
-        if ($prog) { Show-Progress "Enviando $name…" }
+        if ($prog) { Show-Progress "Enviando $name..." }
         $remotes += Upload-File $final $name $prog
         Remove-Item $final -ErrorAction SilentlyContinue
     }
