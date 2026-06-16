@@ -20,9 +20,9 @@ const program = new Command()
 program
   .name('clip2devbox')
   .description(
-    'Print do clipboard (Windows) -> devbox via Tailscale/scp, pronto pra colar no Claude Code'
+    'Arquivo/print do clipboard (Windows) -> devbox via Tailscale/scp, pronto pra colar no Claude Code'
   )
-  .version('0.1.0')
+  .version('0.2.0')
 
 program
   .command('install')
@@ -34,6 +34,7 @@ program
   .option('--remote-dir <path>', 'Diretorio remoto de clips (default /home/<user>/clips)')
   .option('--hotkey <combo>', 'Combinacao da hotkey', 'CTRL+ALT+V')
   .option('--retention-hours <n>', 'Horas ate apagar clips na devbox', '24')
+  .option('--max-file-mb <n>', 'Tamanho maximo por arquivo em MB (0 = sem limite)', '100')
   .action((opts) => {
     guard(() => {
       const result = install({
@@ -44,6 +45,7 @@ program
         remoteDir: opts.remoteDir,
         hotkey: opts.hotkey,
         retentionHours: Number(opts.retentionHours),
+        maxFileMb: Number(opts.maxFileMb),
       })
       console.log('')
       console.log('Pronto! Fluxo: Win+Shift+S -> %s -> no Claude da devbox: /clip', result.hotkey)

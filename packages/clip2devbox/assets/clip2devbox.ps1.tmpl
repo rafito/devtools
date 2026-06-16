@@ -1,12 +1,13 @@
 # clip2devbox.ps1 -- gerado por `clip2devbox install` (NAO edite a mao; rode install de novo)
-# Pega imagem do clipboard (bitmap, arquivo copiado, ou URL de imagem),
-# envia pra devbox via scp, e troca o clipboard pelos caminhos remotos com prefixo "@".
+# Pega do clipboard: bitmap (print), arquivo(s) copiado(s) no Explorer (qualquer tipo),
+# ou URL (qualquer arquivo). Envia pra devbox via scp e troca o clipboard pelos
+# caminhos remotos com prefixo "@".
 
 $ErrorActionPreference = 'Stop'
 
 $Host_     = '@@HOST@@'        # entrada do ~/.ssh/config
 $RemoteDir = '@@REMOTE_DIR@@'  # diretorio remoto (absoluto)
-$ImgExt    = @('.png','.jpg','.jpeg','.gif','.bmp','.webp','.tif','.tiff','.avif','.heic','.svg')
+$MaxBytes  = @@MAX_BYTES@@     # tamanho maximo por arquivo (bytes); 0 = sem limite
 
 function Beep-Ok   { [System.Console]::Beep(880, 120) }
 function Beep-Fail { [System.Console]::Beep(220, 250) }
@@ -35,6 +36,36 @@ function Upload-File($localPath, $remoteName) {
     return "$RemoteDir/$remoteName"
 }
 
+# Deixa o basename seguro pro shell remoto e pro @mention: tira diretorio,
+# troca espacos e caracteres problematicos por "_", preserva letras (com acento),
+# numeros, ".", "-" e "_".
+function Safe-Name($name) {
+    $base = [System.IO.Path]::GetFileName("$name")
+    if ([string]::IsNullOrWhiteSpace($base)) { $base = 'arquivo' }
+    $clean = $base -replace '\s+', '_'
+    $clean = $clean -replace '[^\p{L}\p{N}._-]', '_'
+    if ($clean -match '^\.*$') { $clean = "arquivo$clean" }
+    return $clean
+}
+
+# Garante nome unico dentro do lote: relatorio.pdf -> relatorio-1.pdf -> relatorio-2.pdf
+function Unique-Name($name, $used) {
+    if (-not $used.ContainsKey($name)) { $used[$name] = $true; return $name }
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($name)
+    $ext  = [System.IO.Path]::GetExtension($name)
+    $i = 1
+    while ($true) {
+        $cand = "$stem-$i$ext"
+        if (-not $used.ContainsKey($cand)) { $used[$cand] = $true; return $cand }
+        $i++
+    }
+}
+
+function Too-Big($path) {
+    if ($MaxBytes -le 0) { return $false }
+    return ((Get-Item $path).Length -gt $MaxBytes)
+}
+
 function Ext-FromContentType($ct) {
     switch -regex ($ct) {
         'png'        { return '.png' }
@@ -46,7 +77,13 @@ function Ext-FromContentType($ct) {
         'tiff?'      { return '.tif' }
         'avif'       { return '.avif' }
         'heic|heif'  { return '.heic' }
-        default      { return '.img' }
+        'pdf'        { return '.pdf' }
+        'zip'        { return '.zip' }
+        'json'       { return '.json' }
+        'csv'        { return '.csv' }
+        'html'       { return '.html' }
+        'plain'      { return '.txt' }
+        default      { return '.bin' }
     }
 }
 
@@ -55,7 +92,7 @@ try {
     $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
     $remotes = @()
 
-    # --- caso 1: bitmap no clipboard ---
+    # --- caso 1: bitmap no clipboard (print, "copiar imagem") ---
     $img = [System.Windows.Forms.Clipboard]::GetImage()
     if ($null -ne $img) {
         $name = "clip-$stamp.png"
@@ -65,51 +102,65 @@ try {
         $remotes += Upload-File $tmp $name
         Remove-Item $tmp -ErrorAction SilentlyContinue
     }
-    # --- caso 2: arquivo(s) de imagem copiado(s) no Explorer ---
+    # --- caso 2: arquivo(s) copiado(s) no Explorer (qualquer tipo) ---
     elseif ([System.Windows.Forms.Clipboard]::ContainsFileDropList()) {
         $files = @([System.Windows.Forms.Clipboard]::GetFileDropList()) |
-                 Where-Object { $ImgExt -contains ([System.IO.Path]::GetExtension($_).ToLower()) -and (Test-Path $_) }
-        if ($files.Count -eq 0) { Beep-Fail; Toast 'Arquivo(s) copiado(s), mas nenhuma imagem reconhecida.'; exit 1 }
+                 Where-Object { (Test-Path $_) -and -not (Test-Path $_ -PathType Container) }
+        if ($files.Count -eq 0) { Beep-Fail; Toast 'Nada pra enviar (so pastas ou caminhos invalidos?).'; exit 1 }
         Ensure-RemoteDir
-        $i = 0
+        $used = @{}
+        $skipped = 0
         foreach ($f in $files) {
-            $ext  = [System.IO.Path]::GetExtension($f).ToLower()
-            $name = if ($files.Count -gt 1) { "clip-$stamp-$i$ext" } else { "clip-$stamp$ext" }
+            if (Too-Big $f) {
+                $skipped++
+                Toast "Pulado (acima do limite): $([System.IO.Path]::GetFileName($f))"
+                continue
+            }
+            $name = Unique-Name (Safe-Name $f) $used
             $remotes += Upload-File $f $name
-            $i++
         }
+        if ($remotes.Count -eq 0) { Beep-Fail; Toast "Nenhum arquivo enviado ($skipped acima do limite)."; exit 1 }
     }
-    # --- caso 3: texto que e URL de imagem ---
+    # --- caso 3: texto que e URL (qualquer arquivo) ---
     elseif ([System.Windows.Forms.Clipboard]::ContainsText()) {
         $txt = [System.Windows.Forms.Clipboard]::GetText().Trim()
         if ($txt -notmatch '^(https?)://\S+$') {
-            Beep-Fail; Toast 'Clipboard tem texto, mas nao e URL. Copie uma imagem.'; exit 1
+            Beep-Fail; Toast 'Clipboard tem texto, mas nao e URL. Copie um arquivo, imagem ou URL.'; exit 1
         }
         $tmp = Join-Path $env:TEMP "clip-$stamp.download"
         try {
-            $resp = Invoke-WebRequest -Uri $txt -OutFile $tmp -PassThru -UseBasicParsing -TimeoutSec 30
+            $resp = Invoke-WebRequest -Uri $txt -OutFile $tmp -PassThru -UseBasicParsing -TimeoutSec 60
         } catch { Beep-Fail; Toast "Download falhou: $($_.Exception.Message)"; exit 1 }
-        $ct = "$($resp.Headers['Content-Type'])"
-        if ($ct -notmatch '^image/') {
-            $urlExt = [System.IO.Path]::GetExtension(($txt -split '\?')[0]).ToLower()
-            if ($ImgExt -notcontains $urlExt) {
-                Remove-Item $tmp -ErrorAction SilentlyContinue
-                Beep-Fail; Toast "URL nao e imagem (Content-Type: $ct)."; exit 1
-            }
-            $ext = $urlExt
-        } else {
-            $ext = Ext-FromContentType $ct
+
+        # nome: Content-Disposition -> basename da URL -> fallback clip-<stamp><ext>
+        $name = $null
+        $cd = "$($resp.Headers['Content-Disposition'])"
+        if ($cd -match "filename\*?=(?:UTF-8'')?`"?([^`";]+)`"?") {
+            $name = Safe-Name ([System.Uri]::UnescapeDataString($matches[1]))
         }
-        $name  = "clip-$stamp$ext"
+        if (-not $name) {
+            try { $urlBase = [System.IO.Path]::GetFileName(([System.Uri]$txt).AbsolutePath) } catch { $urlBase = '' }
+            if ($urlBase) { $name = Safe-Name $urlBase }
+        }
+        if (-not $name -or $name -notmatch '\.') {
+            $ext  = Ext-FromContentType "$($resp.Headers['Content-Type'])"
+            $stem = if ($name) { [System.IO.Path]::GetFileNameWithoutExtension($name) } else { "clip-$stamp" }
+            $name = "$stem$ext"
+        }
+
         $final = Join-Path $env:TEMP $name
         Move-Item $tmp $final -Force
+        if (Too-Big $final) {
+            Remove-Item $final -ErrorAction SilentlyContinue
+            Beep-Fail; Toast 'Arquivo baixado esta acima do limite.'; exit 1
+        }
         Ensure-RemoteDir
         $remotes += Upload-File $final $name
         Remove-Item $final -ErrorAction SilentlyContinue
     }
     else {
         Beep-Fail
-        Toast 'Sem imagem no clipboard. Tira o print (Win+Shift+S) ou copie uma imagem.'
+        Toast 'Clipboard vazio. Copie um arquivo (Ctrl+C), tire um print (Win+Shift+S) ou copie uma URL.'
         exit 1
     }
 

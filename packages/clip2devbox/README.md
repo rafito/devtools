@@ -1,14 +1,16 @@
 # @devorama/clip2devbox
 
-Manda o **print do clipboard** (Windows) pra uma **devbox** via Tailscale + `scp` e troca o clipboard pelo **caminho remoto com prefixo `@`** — pronto pra colar no Claude Code / ttyd.
+Manda **arquivo ou print do clipboard** (Windows) pra uma **devbox** via Tailscale + `scp` e troca o clipboard pelo **caminho remoto com prefixo `@`** — pronto pra colar no Claude Code / ttyd.
 
-Fluxo: `Win+Shift+S` → `Ctrl+Alt+V` → no Claude da devbox `/clip` (ou cola `Ctrl+V` o `@/home/voce/clips/...` e Enter).
+Fluxo: copia (`Ctrl+C` num arquivo / `Win+Shift+S` print / "copiar link") → `Ctrl+Alt+V` → no Claude da devbox `/clip` (ou cola `Ctrl+V` o `@/home/voce/clips/...` e Enter).
 
-Cobre 3 origens de imagem, nesta prioridade:
+Cobre 3 origens, nesta prioridade:
 
-1. **bitmap** no clipboard (print, "copiar imagem" do browser, Paint/PS)
-2. **arquivo(s)** de imagem copiado(s) no Explorer (sobe direto, suporta vários)
-3. **URL** de imagem ("copiar endereço da imagem") — baixa e sobe
+1. **bitmap** no clipboard (print, "copiar imagem" do browser, Paint/PS) → vira `.png`
+2. **arquivo(s)** copiado(s) no Explorer — **qualquer tipo** (PDF, .csv, código, .zip…), sobe direto preservando o nome, suporta vários
+3. **URL** ("copiar link/endereço") — baixa e sobe qualquer arquivo (nome via `Content-Disposition`/URL)
+
+Arquivos acima de `--max-file-mb` (default 100 MB) são pulados com aviso.
 
 ## Pré-requisitos
 
@@ -38,7 +40,8 @@ clip2devbox install \
   --remote-user rafito \            # default: usuario local do Windows
   --remote-dir /home/rafito/clips \ # default: /home/<user>/clips
   --hotkey CTRL+ALT+V \             # combinacao da hotkey
-  --retention-hours 24              # apaga clips mais velhos que isso
+  --retention-hours 24 \            # apaga clips mais velhos que isso
+  --max-file-mb 100                 # tamanho maximo por arquivo (0 = sem limite)
 ```
 
 ## Uso
@@ -52,18 +55,18 @@ clip2devbox install \
 
 Na devbox, depois de qualquer envio:
 
-- `/clip` → carrega a imagem mais recente de `~/clips` no contexto
-- `/clip 3` → carrega as 3 mais recentes
+- `/clip` → carrega o arquivo mais recente de `~/clips` no contexto (imagem, PDF, texto…)
+- `/clip 3` → carrega os 3 mais recentes
 
 ## Feedback
 
 - **beep agudo** + balão → enviado
-- **beep grave** + balão → erro (sem imagem, URL inválida, devbox fora do ar…)
+- **beep grave** + balão → erro (clipboard vazio, URL inválida, arquivo acima do limite, devbox fora do ar…)
 
 ## Como funciona
 
 `install` renderiza um script PowerShell em `%LOCALAPPDATA%\clip2devbox\clip2devbox.ps1`
-com o host e o diretório embutidos, e cria um atalho `.lnk` no Start Menu com a
+com o host, o diretório e o limite de tamanho embutidos, e cria um atalho `.lnk` no Start Menu com a
 hotkey global apontando pra ele. A auth herda do **Tailscale SSH**, então o `scp`
 não pede senha. A limpeza é uma linha de `crontab` na devbox (marcada com
 `# clip2devbox-cleanup`).

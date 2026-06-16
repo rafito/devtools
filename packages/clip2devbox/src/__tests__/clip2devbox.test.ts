@@ -13,6 +13,14 @@ describe('renderTemplate', () => {
   it('lanca se faltar variavel', () => {
     expect(() => renderTemplate('@@Z@@', {})).toThrow(/Z/)
   })
+  it('renderiza os tokens do ps1 (HOST/REMOTE_DIR/MAX_BYTES)', () => {
+    const out = renderTemplate("h='@@HOST@@' d='@@REMOTE_DIR@@' m=@@MAX_BYTES@@", {
+      HOST: 'devbox',
+      REMOTE_DIR: '/home/rafito/clips',
+      MAX_BYTES: '104857600',
+    })
+    expect(out).toBe("h='devbox' d='/home/rafito/clips' m=104857600")
+  })
 })
 
 describe('buildCronLine', () => {

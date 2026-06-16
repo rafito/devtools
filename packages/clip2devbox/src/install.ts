@@ -30,6 +30,8 @@ export interface InstallOptions {
   hotkey: string
   /** Horas de retencao dos clips na devbox (default 24). */
   retentionHours: number
+  /** Tamanho maximo por arquivo em MB (default 100; 0 = sem limite). */
+  maxFileMb: number
 }
 
 export interface InstallResult {
@@ -97,7 +99,12 @@ export function install(opts: InstallOptions): InstallResult {
 
   // 4. script PowerShell renderizado
   const tmpl = readFileSync(path.join(assetsDir(), 'clip2devbox.ps1.tmpl'), 'utf8')
-  const rendered = renderTemplate(tmpl, { HOST: alias, REMOTE_DIR: remoteDir })
+  const maxBytes = opts.maxFileMb > 0 ? Math.round(opts.maxFileMb * 1024 * 1024) : 0
+  const rendered = renderTemplate(tmpl, {
+    HOST: alias,
+    REMOTE_DIR: remoteDir,
+    MAX_BYTES: String(maxBytes),
+  })
   mkdirSync(installDir(), { recursive: true })
   const sp = scriptPath()
   writeFileSync(sp, rendered, 'utf8')
