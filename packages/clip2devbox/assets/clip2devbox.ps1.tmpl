@@ -71,10 +71,12 @@ function Ensure-RemoteDir {
 # via DoEvents; senao usa o caminho rapido sincrono (sem custo de job).
 function Upload-File($localPath, $remoteName, $showProgress) {
     $dst = "${Host_}:${RemoteDir}/${remoteName}"
+    # ServerAlive*: ping a cada 15s; apos 4 sem resposta (~60s) o ssh aborta o scp
+    # sozinho -> cancela um envio travado (devbox caiu, rede morreu no meio, etc.).
     if ($showProgress) {
         $job = Start-Job -ScriptBlock {
             param($lp, $d)
-            & scp -o BatchMode=yes -o ConnectTimeout=60 -q $lp $d
+            & scp -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -q $lp $d
             $LASTEXITCODE
         } -ArgumentList $localPath, $dst
         while ($job.State -eq 'Running') {
@@ -83,10 +85,10 @@ function Upload-File($localPath, $remoteName, $showProgress) {
         }
         $code = Receive-Job $job
         Remove-Job $job -Force
-        if ($code -ne 0) { throw "scp falhou (exit $code)" }
+        if ($code -ne 0) { throw "envio falhou/cancelado (exit $code) — devbox respondeu?" }
     } else {
-        & scp -o BatchMode=yes -o ConnectTimeout=20 -q $localPath $dst
-        if ($LASTEXITCODE -ne 0) { throw "scp falhou (exit $LASTEXITCODE)" }
+        & scp -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -q $localPath $dst
+        if ($LASTEXITCODE -ne 0) { throw "envio falhou/cancelado (exit $LASTEXITCODE) — devbox respondeu?" }
     }
     return "$RemoteDir/$remoteName"
 }
