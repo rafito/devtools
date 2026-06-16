@@ -1,13 +1,20 @@
 # clip2devbox.ps1 -- gerado por `clip2devbox install` (NAO edite a mao; rode install de novo)
 # Pega do clipboard: bitmap (print), arquivo(s) copiado(s) no Explorer (qualquer tipo),
 # ou URL (qualquer arquivo). Envia pra devbox via scp e troca o clipboard pelos
-# caminhos remotos com prefixo "@".
+# caminhos remotos com prefixo "@". Mostra progresso em arquivo grande e, opcional,
+# se auto-atualiza em background apos enviar.
 
 $ErrorActionPreference = 'Stop'
 
-$Host_     = '@@HOST@@'        # entrada do ~/.ssh/config
-$RemoteDir = '@@REMOTE_DIR@@'  # diretorio remoto (absoluto)
-$MaxBytes  = @@MAX_BYTES@@     # tamanho maximo por arquivo (bytes); 0 = sem limite
+$Host_        = '@@HOST@@'                # entrada do ~/.ssh/config
+$RemoteDir    = '@@REMOTE_DIR@@'          # diretorio remoto (absoluto)
+$MaxBytes     = @@MAX_BYTES@@             # tamanho maximo por arquivo (bytes); 0 = sem limite
+$ProgressMin  = @@PROGRESS_MIN_BYTES@@    # mostra barra acima disso (bytes); 0 = nunca
+$AutoUpdate   = '@@AUTO_UPDATE@@'         # '1' = checa versao nova em background
+$Version      = '@@VERSION@@'            # versao instalada (pra comparar no auto-update)
+$Pkg          = '@devorama/clip2devbox'
+
+$script:UI = $null
 
 function Beep-Ok   { [System.Console]::Beep(880, 120) }
 function Beep-Fail { [System.Console]::Beep(220, 250) }
@@ -25,14 +32,62 @@ function Toast($msg) {
     } catch { }
 }
 
+# --- janela de progresso (barra indeterminada/marquee) ------------------------
+function Show-Progress($text) {
+    if ($ProgressMin -le 0) { return }
+    if (-not $script:UI) {
+        $f = New-Object System.Windows.Forms.Form
+        $f.Text = 'clip2devbox'
+        $f.ClientSize = New-Object System.Drawing.Size(360, 80)
+        $f.StartPosition = 'CenterScreen'
+        $f.FormBorderStyle = 'FixedDialog'
+        $f.TopMost = $true; $f.ControlBox = $false
+        $f.MinimizeBox = $false; $f.MaximizeBox = $false; $f.ShowInTaskbar = $false
+        $lbl = New-Object System.Windows.Forms.Label
+        $lbl.SetBounds(15, 12, 330, 28); $lbl.AutoEllipsis = $true
+        $bar = New-Object System.Windows.Forms.ProgressBar
+        $bar.SetBounds(15, 44, 330, 22)
+        $bar.Style = 'Marquee'; $bar.MarqueeAnimationSpeed = 30
+        $f.Controls.Add($lbl); $f.Controls.Add($bar)
+        $script:UI = @{ Form = $f; Label = $lbl }
+        $f.Show()
+    }
+    $script:UI.Label.Text = $text
+    [System.Windows.Forms.Application]::DoEvents()
+}
+function Hide-Progress {
+    if ($script:UI) {
+        try { $script:UI.Form.Close(); $script:UI.Form.Dispose() } catch { }
+        $script:UI = $null
+    }
+}
+
 function Ensure-RemoteDir {
     & ssh -o BatchMode=yes -o ConnectTimeout=10 $Host_ "mkdir -p '$RemoteDir'"
     if ($LASTEXITCODE -ne 0) { throw "ssh mkdir falhou (exit $LASTEXITCODE)" }
 }
 
-function Upload-File($localPath, $remoteName) {
-    & scp -o BatchMode=yes -o ConnectTimeout=20 -q $localPath "${Host_}:${RemoteDir}/${remoteName}"
-    if ($LASTEXITCODE -ne 0) { throw "scp falhou (exit $LASTEXITCODE)" }
+# Sobe um arquivo. Se $showProgress, roda o scp num job e pulsa a barra (marquee)
+# via DoEvents; senao usa o caminho rapido sincrono (sem custo de job).
+function Upload-File($localPath, $remoteName, $showProgress) {
+    $dst = "${Host_}:${RemoteDir}/${remoteName}"
+    if ($showProgress) {
+        $job = Start-Job -ScriptBlock {
+            param($lp, $d)
+            & scp -o BatchMode=yes -o ConnectTimeout=60 -q $lp $d
+            $LASTEXITCODE
+        } -ArgumentList $localPath, $dst
+        while ($job.State -eq 'Running') {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 80
+        }
+        $code = Receive-Job $job
+        Remove-Job $job -Force
+        if ($code -ne 0) { throw "scp falhou (exit $code)" }
+    } else {
+        & scp -o BatchMode=yes -o ConnectTimeout=20 -q $localPath $dst
+        if ($LASTEXITCODE -ne 0) { throw "scp falhou (exit $LASTEXITCODE)" }
+    }
     return "$RemoteDir/$remoteName"
 }
 
@@ -61,10 +116,9 @@ function Unique-Name($name, $used) {
     }
 }
 
-function Too-Big($path) {
-    if ($MaxBytes -le 0) { return $false }
-    return ((Get-Item $path).Length -gt $MaxBytes)
-}
+function File-Size($path) { return (Get-Item $path).Length }
+function Too-Big($path)   { if ($MaxBytes -le 0) { return $false }; return ((File-Size $path) -gt $MaxBytes) }
+function Wants-Progress($path) { return (($ProgressMin -gt 0) -and ((File-Size $path) -gt $ProgressMin)) }
 
 function Ext-FromContentType($ct) {
     switch -regex ($ct) {
@@ -87,6 +141,35 @@ function Ext-FromContentType($ct) {
     }
 }
 
+# Apos enviar: 1x/dia (marcador em LOCALAPPDATA), checa npm e instala versao nova
+# em processo destacado/oculto, sem bloquear o envio atual.
+function Maybe-AutoUpdate {
+    if ($AutoUpdate -ne '1') { return }
+    $marker = Join-Path $env:LOCALAPPDATA 'clip2devbox\.last-update-check'
+    try {
+        if (Test-Path $marker) {
+            $age = (Get-Date) - (Get-Item $marker).LastWriteTime
+            if ($age.TotalHours -lt 24) { return }
+        }
+    } catch { }
+    New-Item -ItemType File -Path $marker -Force | Out-Null   # marca agora (evita re-disparo)
+
+    $updater = @"
+`$ErrorActionPreference = 'SilentlyContinue'
+`$pkg = '$Pkg'
+`$local = '$Version'
+`$latest = (& npm view `$pkg version 2>`$null)
+if (`$latest -and (`$latest.Trim() -ne `$local)) {
+    if (Get-Command pnpm -ErrorAction SilentlyContinue) { & pnpm add -g "`$pkg@latest" 2>`$null }
+    else { & npm i -g "`$pkg@latest" 2>`$null }
+    & clip2devbox install 2>`$null
+}
+"@
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($updater))
+    Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
+        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $b64 | Out-Null
+}
+
 try {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -99,7 +182,9 @@ try {
         $tmp  = Join-Path $env:TEMP $name
         $img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
         Ensure-RemoteDir
-        $remotes += Upload-File $tmp $name
+        $prog = Wants-Progress $tmp
+        if ($prog) { Show-Progress "Enviando $name…" }
+        $remotes += Upload-File $tmp $name $prog
         Remove-Item $tmp -ErrorAction SilentlyContinue
     }
     # --- caso 2: arquivo(s) copiado(s) no Explorer (qualquer tipo) ---
@@ -110,14 +195,18 @@ try {
         Ensure-RemoteDir
         $used = @{}
         $skipped = 0
+        $i = 0
         foreach ($f in $files) {
             if (Too-Big $f) {
                 $skipped++
                 Toast "Pulado (acima do limite): $([System.IO.Path]::GetFileName($f))"
-                continue
+                $i++; continue
             }
             $name = Unique-Name (Safe-Name $f) $used
-            $remotes += Upload-File $f $name
+            $prog = Wants-Progress $f
+            if ($prog) { Show-Progress "Enviando ($($i + 1)/$($files.Count)) $name…" }
+            $remotes += Upload-File $f $name $prog
+            $i++
         }
         if ($remotes.Count -eq 0) { Beep-Fail; Toast "Nenhum arquivo enviado ($skipped acima do limite)."; exit 1 }
     }
@@ -155,7 +244,9 @@ try {
             Beep-Fail; Toast 'Arquivo baixado esta acima do limite.'; exit 1
         }
         Ensure-RemoteDir
-        $remotes += Upload-File $final $name
+        $prog = Wants-Progress $final
+        if ($prog) { Show-Progress "Enviando $name…" }
+        $remotes += Upload-File $final $name $prog
         Remove-Item $final -ErrorAction SilentlyContinue
     }
     else {
@@ -164,13 +255,16 @@ try {
         exit 1
     }
 
+    Hide-Progress
     $clip = ($remotes | ForEach-Object { "@$_" }) -join ' '
     Set-Clipboard -Value $clip
     Beep-Ok
     Toast "Enviado ($($remotes.Count)). Clipboard = $clip"
+    Maybe-AutoUpdate
     exit 0
 }
 catch {
+    Hide-Progress
     Beep-Fail
     Toast "Erro: $($_.Exception.Message)"
     exit 1

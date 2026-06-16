@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -5,6 +6,12 @@ import { fileURLToPath } from 'node:url'
 /** Diretorio `assets/` empacotado (../assets relativo ao dist). */
 export function assetsDir(): string {
   return fileURLToPath(new URL('../assets/', import.meta.url))
+}
+
+/** Versao do pacote, lida do package.json empacotado (fonte unica). */
+export function packageVersion(): string {
+  const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url))
+  return JSON.parse(readFileSync(pkgPath, 'utf8')).version as string
 }
 
 /** Pasta de instalacao local: %LOCALAPPDATA%\clip2devbox. */

@@ -5,6 +5,7 @@ import { createHotkey } from './hotkey'
 import {
   assetsDir,
   installDir,
+  packageVersion,
   powershellExe,
   scriptPath,
   sshConfigPath,
@@ -32,6 +33,10 @@ export interface InstallOptions {
   retentionHours: number
   /** Tamanho maximo por arquivo em MB (default 100; 0 = sem limite). */
   maxFileMb: number
+  /** Acima deste tamanho (MB) mostra barra de progresso (default 5; 0 = nunca). */
+  progressMinMb: number
+  /** Checa e instala versao nova em background apos enviar (default true). */
+  autoUpdate: boolean
 }
 
 export interface InstallResult {
@@ -100,10 +105,14 @@ export function install(opts: InstallOptions): InstallResult {
   // 4. script PowerShell renderizado
   const tmpl = readFileSync(path.join(assetsDir(), 'clip2devbox.ps1.tmpl'), 'utf8')
   const maxBytes = opts.maxFileMb > 0 ? Math.round(opts.maxFileMb * 1024 * 1024) : 0
+  const progressMinBytes = opts.progressMinMb > 0 ? Math.round(opts.progressMinMb * 1024 * 1024) : 0
   const rendered = renderTemplate(tmpl, {
     HOST: alias,
     REMOTE_DIR: remoteDir,
     MAX_BYTES: String(maxBytes),
+    PROGRESS_MIN_BYTES: String(progressMinBytes),
+    AUTO_UPDATE: opts.autoUpdate ? '1' : '0',
+    VERSION: packageVersion(),
   })
   mkdirSync(installDir(), { recursive: true })
   const sp = scriptPath()

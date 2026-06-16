@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { packageVersion } from '../paths'
 import { buildCronLine, renderTemplate } from '../render'
 import { hasSshHost, renderHostBlock, upsertSshHost } from '../ssh-config'
 import { parseDevboxHost } from '../tailscale'
@@ -13,13 +14,25 @@ describe('renderTemplate', () => {
   it('lanca se faltar variavel', () => {
     expect(() => renderTemplate('@@Z@@', {})).toThrow(/Z/)
   })
-  it('renderiza os tokens do ps1 (HOST/REMOTE_DIR/MAX_BYTES)', () => {
-    const out = renderTemplate("h='@@HOST@@' d='@@REMOTE_DIR@@' m=@@MAX_BYTES@@", {
-      HOST: 'devbox',
-      REMOTE_DIR: '/home/rafito/clips',
-      MAX_BYTES: '104857600',
-    })
-    expect(out).toBe("h='devbox' d='/home/rafito/clips' m=104857600")
+  it('renderiza os tokens do ps1', () => {
+    const out = renderTemplate(
+      "h='@@HOST@@' d='@@REMOTE_DIR@@' m=@@MAX_BYTES@@ p=@@PROGRESS_MIN_BYTES@@ a='@@AUTO_UPDATE@@' v='@@VERSION@@'",
+      {
+        HOST: 'devbox',
+        REMOTE_DIR: '/home/rafito/clips',
+        MAX_BYTES: '104857600',
+        PROGRESS_MIN_BYTES: '5242880',
+        AUTO_UPDATE: '1',
+        VERSION: '0.3.0',
+      }
+    )
+    expect(out).toBe("h='devbox' d='/home/rafito/clips' m=104857600 p=5242880 a='1' v='0.3.0'")
+  })
+})
+
+describe('packageVersion', () => {
+  it('le a versao do package.json (semver)', () => {
+    expect(packageVersion()).toMatch(/^\d+\.\d+\.\d+/)
   })
 })
 

@@ -41,7 +41,9 @@ clip2devbox install \
   --remote-dir /home/rafito/clips \ # default: /home/<user>/clips
   --hotkey CTRL+ALT+V \             # combinacao da hotkey
   --retention-hours 24 \            # apaga clips mais velhos que isso
-  --max-file-mb 100                 # tamanho maximo por arquivo (0 = sem limite)
+  --max-file-mb 100 \               # tamanho maximo por arquivo (0 = sem limite)
+  --progress-min-mb 5 \             # mostra barra de progresso acima disso (0 = nunca)
+  --no-auto-update                  # desliga o auto-update em background
 ```
 
 ## Uso
@@ -62,11 +64,19 @@ Na devbox, depois de qualquer envio:
 
 - **beep agudo** + balão → enviado
 - **beep grave** + balão → erro (clipboard vazio, URL inválida, arquivo acima do limite, devbox fora do ar…)
+- arquivo grande (acima de `--progress-min-mb`, default 5 MB) → **barra de progresso** durante o envio
+
+## Auto-update
+
+Por padrão, depois de um envio bem-sucedido o script checa **1x/dia** (em background, sem
+atrasar nada) se há versão nova no npm e, se houver, roda `pnpm add -g` (ou `npm i -g`) +
+`clip2devbox install` sozinho. Desligue com `--no-auto-update` no install. O auto-update só
+passa a valer **depois que você atualizar uma vez** pra versão que o traz (≥ 0.3.0).
 
 ## Como funciona
 
 `install` renderiza um script PowerShell em `%LOCALAPPDATA%\clip2devbox\clip2devbox.ps1`
-com o host, o diretório e o limite de tamanho embutidos, e cria um atalho `.lnk` no Start Menu com a
-hotkey global apontando pra ele. A auth herda do **Tailscale SSH**, então o `scp`
-não pede senha. A limpeza é uma linha de `crontab` na devbox (marcada com
+com o host, o diretório, os limites de tamanho e a versão embutidos, e cria um atalho `.lnk`
+no Start Menu com a hotkey global apontando pra ele. A auth herda do **Tailscale SSH**, então
+o `scp` não pede senha. A limpeza é uma linha de `crontab` na devbox (marcada com
 `# clip2devbox-cleanup`).

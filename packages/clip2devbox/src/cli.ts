@@ -2,6 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import { install } from './install'
+import { packageVersion } from './paths'
 import { run } from './run'
 import { uninstall } from './uninstall'
 
@@ -22,7 +23,7 @@ program
   .description(
     'Arquivo/print do clipboard (Windows) -> devbox via Tailscale/scp, pronto pra colar no Claude Code'
   )
-  .version('0.2.0')
+  .version(packageVersion())
 
 program
   .command('install')
@@ -35,6 +36,12 @@ program
   .option('--hotkey <combo>', 'Combinacao da hotkey', 'CTRL+ALT+V')
   .option('--retention-hours <n>', 'Horas ate apagar clips na devbox', '24')
   .option('--max-file-mb <n>', 'Tamanho maximo por arquivo em MB (0 = sem limite)', '100')
+  .option(
+    '--progress-min-mb <n>',
+    'Mostra barra de progresso acima deste tamanho em MB (0 = nunca)',
+    '5'
+  )
+  .option('--no-auto-update', 'Nao checar/instalar versao nova em background apos enviar')
   .action((opts) => {
     guard(() => {
       const result = install({
@@ -46,6 +53,8 @@ program
         hotkey: opts.hotkey,
         retentionHours: Number(opts.retentionHours),
         maxFileMb: Number(opts.maxFileMb),
+        progressMinMb: Number(opts.progressMinMb),
+        autoUpdate: opts.autoUpdate,
       })
       console.log('')
       console.log('Pronto! Fluxo: Win+Shift+S -> %s -> no Claude da devbox: /clip', result.hotkey)
