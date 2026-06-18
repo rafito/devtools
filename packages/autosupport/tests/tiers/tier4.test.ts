@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LlmProvider, LlmRunOptions } from '../../src/llm/types'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -20,22 +21,22 @@ function makeTools(): ToolBundle {
   return { definitions: [], execute: vi.fn().mockResolvedValue({}) }
 }
 
+function makeLlm(
+  impl?: (opts: LlmRunOptions) => Promise<{ text: string; steps: number; finishReason: string | null }>
+): LlmProvider & { calls: LlmRunOptions[] } {
+  const calls: LlmRunOptions[] = []
+  return {
+    calls,
+    runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+      calls.push(opts)
+      return impl ? await impl(opts) : { text: 'done', steps: 0, finishReason: 'stop' }
+    }),
+  }
+}
+
 const schema = {
   supportTickets: { id: 'col-id' },
 } as any
-
-vi.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: 'reviewed' }],
-        }),
-      },
-    })),
-  }
-})
 
 import { createTier4Agent } from '../../src/tiers/tier4'
 
@@ -44,20 +45,9 @@ describe('createTier4Agent', () => {
     vi.clearAllMocks()
   })
 
-  it('apiKey vazia lança', () => {
-    expect(() =>
-      createTier4Agent({
-        anthropicApiKey: '',
-        db: {},
-        schema,
-        tools: makeTools(),
-      })
-    ).toThrow(/anthropicApiKey/)
-  })
-
   it('ticket inexistente lança', async () => {
     const agent = createTier4Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db: makeDb(null),
       schema,
       tools: makeTools(),
@@ -68,7 +58,7 @@ describe('createTier4Agent', () => {
   it('happy path: executa sem erro, sem DB write (webhook faz isso)', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: 10 })
     const agent = createTier4Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -78,11 +68,10 @@ describe('createTier4Agent', () => {
     expect(db.update).not.toHaveBeenCalled()
   })
 
-  it('custom model, maxToolLoops e systemPrompt são aceitos', async () => {
+  it('maxToolLoops e systemPrompt customizados são aceitos', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: 5 })
     const agent = createTier4Agent({
-      anthropicApiKey: 'k',
-      model: 'claude-opus-4-5',
+      llm: makeLlm(),
       maxToolLoops: 3,
       systemPrompt: 'custom reviewer',
       db,
@@ -93,48 +82,23 @@ describe('createTier4Agent', () => {
   })
 
   it('passa prNumber e ticketId corretos na mensagem inicial', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    const createMock = vi.fn().mockResolvedValue({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: 'ok' }],
-    })
-    Anthropic.mockImplementation(() => ({
-      messages: { create: createMock },
-    }))
-
     const db = makeDb({ id: 'tk-abc', githubIssueId: 7 })
+    const llm = makeLlm()
     const agent = createTier4Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools: makeTools(),
     })
     await agent.run(88, 'tk-abc')
 
-    const callArgs = createMock.mock.calls[0][0]
-    const content = callArgs.messages[0].content as string
+    const content = llm.calls[0].messages[0].content as string
     expect(content).toContain('PR #88')
     expect(content).toContain('tk-abc')
     expect(content).toContain('#7')
   })
 
   it('tool calls são executadas dentro do loop', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [{ type: 'tool_use', id: 'r1', name: 'read_pr', input: { prNumber: 5 } }],
-          })
-          .mockResolvedValue({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: 'approved' }],
-          }),
-      },
-    }))
-
     const tools: ToolBundle = {
       definitions: [
         { name: 'read_pr', description: 'd', input_schema: { type: 'object', properties: {} } },
@@ -142,9 +106,14 @@ describe('createTier4Agent', () => {
       execute: vi.fn().mockResolvedValue({ title: 'fix: x', body: 'Closes #7' }),
     }
 
+    const llm = makeLlm(async (opts) => {
+      await opts.tools.execute('read_pr', { prNumber: 5 })
+      return { text: 'approved', steps: 1, finishReason: 'stop' }
+    })
+
     const db = makeDb({ id: 'tk-1', githubIssueId: 7 })
     const agent = createTier4Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools,
