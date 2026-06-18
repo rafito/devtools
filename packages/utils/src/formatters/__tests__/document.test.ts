@@ -29,6 +29,18 @@ describe('formatPhone', () => {
   it('formata fixo com 10 dígitos', () => {
     expect(formatPhone('5132345678')).toBe('(51) 3234-5678')
   })
+  it('formata celular com código de país +55 (13 dígitos)', () => {
+    expect(formatPhone('5511987654321')).toBe('+55 (11) 98765-4321')
+  })
+  it('formata fixo com código de país +55 (12 dígitos)', () => {
+    expect(formatPhone('551133334444')).toBe('+55 (11) 3333-4444')
+  })
+  it('aceita entrada já com símbolos', () => {
+    expect(formatPhone('+55 (11) 98765-4321')).toBe('+55 (11) 98765-4321')
+  })
+  it('DDD 55 local (11 dígitos) não é confundido com código de país', () => {
+    expect(formatPhone('55999887766')).toBe('(55) 99988-7766')
+  })
 })
 
 describe('formatCEP', () => {

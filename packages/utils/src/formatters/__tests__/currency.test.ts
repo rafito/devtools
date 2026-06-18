@@ -17,4 +17,20 @@ describe('formatCurrency', () => {
   it('formata valor negativo', () => {
     expect(formatCurrency(-500)).toContain('500')
   })
+
+  it('esconde centavos com fraction digits 0', () => {
+    expect(formatCurrency(189, 'BRL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })).toBe(
+      'R$ 189'
+    )
+  })
+
+  it('respeita casas decimais customizadas', () => {
+    expect(
+      formatCurrency(5340, 'BRL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    ).toBe('R$ 5.340')
+  })
+
+  it('default permanece em 2 casas', () => {
+    expect(formatCurrency(189)).toBe('R$ 189,00')
+  })
 })
