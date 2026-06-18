@@ -1,19 +1,17 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { GitHubClient } from '../clients/github.js'
 import { toErrorMessage } from '../errors.js'
+import type { LlmMessage, LlmProvider } from '../llm/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
-import { runToolLoop } from './runner.js'
 
 const execFileAsync = promisify(execFile)
 
 export type Tier3Config = {
-  anthropicApiKey: string
-  model?: string
+  llm: LlmProvider
   maxToolLoops?: number
   systemPrompt?: string
   branchPrefix?: string
@@ -67,8 +65,6 @@ export async function cleanupTier3Failure(
 }
 
 export function createTier3Agent(cfg: Tier3Config) {
-  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
-  const client = new Anthropic({ apiKey: cfg.anthropicApiKey })
   const branchPrefix = cfg.branchPrefix ?? 'support/fix-'
 
   async function run(ticketId: string): Promise<void> {
@@ -85,9 +81,9 @@ export function createTier3Agent(cfg: Tier3Config) {
     const writtenFiles: string[] = []
     const branchesCreated: string[] = []
 
-    const initial = [
+    const initial: LlmMessage[] = [
       {
-        role: 'user' as const,
+        role: 'user',
         content: [
           `Ticket ID: ${ticketId}`,
           `GitHub Issue: #${ticket.githubIssueId}`,
@@ -102,13 +98,12 @@ export function createTier3Agent(cfg: Tier3Config) {
       },
     ]
 
-    await runToolLoop({
-      client,
-      model: cfg.model ?? 'claude-opus-4-7',
+    await cfg.llm.runWithTools({
+      role: 'heavy',
       system: cfg.systemPrompt ?? DEFAULT_SYSTEM(branchPrefix),
-      maxToolLoops: cfg.maxToolLoops ?? 12,
-      initialMessages: initial,
+      messages: initial,
       tools: cfg.tools,
+      maxToolLoops: cfg.maxToolLoops ?? 12,
       onToolResult: (name, input, result) => {
         const r = result as { prNumber?: number; success?: boolean }
         const args = input as { path?: string; name?: string }
