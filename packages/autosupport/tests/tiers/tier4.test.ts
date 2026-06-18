@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -51,7 +51,7 @@ describe('createTier4Agent', () => {
         db: {},
         schema,
         tools: makeTools(),
-      }),
+      })
     ).toThrow(/anthropicApiKey/)
   })
 
@@ -122,7 +122,8 @@ describe('createTier4Agent', () => {
     const Anthropic = (await import('@anthropic-ai/sdk')).default as any
     Anthropic.mockImplementation(() => ({
       messages: {
-        create: vi.fn()
+        create: vi
+          .fn()
           .mockResolvedValueOnce({
             stop_reason: 'tool_use',
             content: [{ type: 'tool_use', id: 'r1', name: 'read_pr', input: { prNumber: 5 } }],

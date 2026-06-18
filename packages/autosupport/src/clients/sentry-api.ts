@@ -1,8 +1,38 @@
+import { toErrorMessage } from '../errors.js'
+
 export type SentryConfig = {
   apiToken: string
   orgSlug: string
   projectSlug: string
-  apiBase?: string  // default https://us.sentry.io/api/0
+  apiBase?: string // default https://us.sentry.io/api/0
+}
+
+// Minimal shapes of the Sentry REST responses this client reads. The API
+// returns much more; we only type the fields we consume.
+type SentryFrameJson = { filename?: string; lineno?: number; function?: string }
+type SentryEventJson = {
+  entries?: Array<{
+    type?: string
+    data?: { values?: Array<{ stacktrace?: { frames?: SentryFrameJson[] } }> }
+  }>
+}
+type SentryIssueJson = {
+  title: string
+  culprit: string
+  count?: string
+  userCount?: number
+  firstSeen: string
+  lastSeen: string
+  permalink: string
+}
+type SentryListItemJson = {
+  id: string
+  title: string
+  culprit: string
+  count?: string
+  userCount?: number
+  lastSeen: string
+  permalink: string
 }
 
 export type SentryIssueResult = {
@@ -33,8 +63,7 @@ export function createSentryClient(cfg: SentryConfig) {
   if (!cfg.orgSlug) throw new Error('SENTRY_ORG_SLUG não configurado')
   if (!cfg.projectSlug) throw new Error('SENTRY_PROJECT_SLUG não configurado')
 
-  const base = (cfg.apiBase ?? 'https://us.sentry.io/api/0') +
-               `/organizations/${cfg.orgSlug}`
+  const base = `${cfg.apiBase ?? 'https://us.sentry.io/api/0'}/organizations/${cfg.orgSlug}`
   const headers = {
     Authorization: `Bearer ${cfg.apiToken}`,
     'Content-Type': 'application/json',
@@ -47,28 +76,30 @@ export function createSentryClient(cfg: SentryConfig) {
         fetch(`${base}/issues/${issueId}/events/latest/`, { headers }),
       ])
       if (!issueRes.ok) return { error: `Sentry API error: ${issueRes.status}` }
-      const issue = await issueRes.json() as any
+      const issue = (await issueRes.json()) as SentryIssueJson
       let stackTrace = '(stack trace não disponível)'
       if (eventRes.ok) {
-        const event = await eventRes.json() as any
-        const exc = event.entries?.find((e: any) => e.type === 'exception')
-        const frames: any[] = exc?.data?.values?.[0]?.stacktrace?.frames ?? []
-        stackTrace = frames.slice(-10)
-          .map((f: any) => `  ${f.filename}:${f.lineno} in ${f.function}`)
-          .join('\n').slice(0, 4000)
+        const event = (await eventRes.json()) as SentryEventJson
+        const exc = event.entries?.find((e) => e.type === 'exception')
+        const frames = exc?.data?.values?.[0]?.stacktrace?.frames ?? []
+        stackTrace = frames
+          .slice(-10)
+          .map((f) => `  ${f.filename}:${f.lineno} in ${f.function}`)
+          .join('\n')
+          .slice(0, 4000)
       }
       return {
         title: issue.title,
         culprit: issue.culprit,
-        occurrences: parseInt(issue.count ?? '0', 10),
+        occurrences: Number.parseInt(issue.count ?? '0', 10),
         usersAffected: issue.userCount ?? 0,
         firstSeen: issue.firstSeen,
         lastSeen: issue.lastSeen,
         permalink: issue.permalink,
         stackTrace,
       }
-    } catch (err: any) {
-      return { error: `Erro ao consultar Sentry: ${err.message}` }
+    } catch (err) {
+      return { error: `Erro ao consultar Sentry: ${toErrorMessage(err)}` }
     }
   }
 
@@ -80,20 +111,20 @@ export function createSentryClient(cfg: SentryConfig) {
       const url = `${base}/issues/?query=${encodeURIComponent(fullQuery)}&limit=3`
       const res = await fetch(url, { headers })
       if (!res.ok) return { error: `Sentry API error: ${res.status}` }
-      const issues = await res.json() as any[]
+      const issues = (await res.json()) as SentryListItemJson[]
       return {
-        issues: issues.map((i: any) => ({
+        issues: issues.map((i) => ({
           id: i.id,
           title: i.title,
           culprit: i.culprit,
-          occurrences: parseInt(i.count ?? '0', 10),
+          occurrences: Number.parseInt(i.count ?? '0', 10),
           usersAffected: i.userCount ?? 0,
           lastSeen: i.lastSeen,
           permalink: i.permalink,
         })),
       }
-    } catch (err: any) {
-      return { error: `Erro ao consultar Sentry: ${err.message}` }
+    } catch (err) {
+      return { error: `Erro ao consultar Sentry: ${toErrorMessage(err)}` }
     }
   }
 

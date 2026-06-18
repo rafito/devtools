@@ -1,24 +1,25 @@
-import { createSupportSchema, type SupportSchema } from './schema/index.js'
-import { createGitHubClient, type GitHubClient } from './clients/github.js'
-import { createSentryClient, type SentryClient } from './clients/sentry-api.js'
-import { createSseBus, type SseBus } from './notifications/sse-bus.js'
-import { createSupportQueue, type SupportQueue } from './queue/index.js'
-import { createFilesystemTools } from './tools/filesystem.js'
-import { createLogsTool } from './tools/logs.js'
-import { createTestsTool } from './tools/tests.js'
-import { createGitTools } from './tools/git.js'
-import { createGithubTools } from './tools/github-tools.js'
-import { createSentryTool } from './tools/sentry-tools.js'
+import type { Request, Response } from 'express'
+import { type GitHubClient, createGitHubClient } from './clients/github.js'
+import { type SentryClient, createSentryClient } from './clients/sentry-api.js'
+import { type SseBus, createSseBus } from './notifications/sse-bus.js'
+import { type SupportQueue, createSupportQueue } from './queue/index.js'
+import { type SupportSchema, createSupportSchema } from './schema/index.js'
 import { createTier1Agent } from './tiers/tier1.js'
 import { createTier2Agent } from './tiers/tier2.js'
 import { createTier3Agent } from './tiers/tier3.js'
 import { createTier4Agent } from './tiers/tier4.js'
+import { createFilesystemTools } from './tools/filesystem.js'
+import { createGitTools } from './tools/git.js'
+import { createGithubTools } from './tools/github-tools.js'
+import { createLogsTool } from './tools/logs.js'
+import { createSentryTool } from './tools/sentry-tools.js'
+import { createTestsTool } from './tools/tests.js'
+import type { SupportDb, ToolBundle, UserContext } from './types.js'
 import { createGithubWebhookHandler } from './webhooks/github.js'
 import { createSentryWebhookHandler } from './webhooks/sentry.js'
-import type { ToolBundle, UserContext } from './types.js'
 
 export type SupportPipelineConfig = {
-  db: any
+  db: SupportDb
   schema?: SupportSchema
   anthropicApiKey: string
 
@@ -57,8 +58,10 @@ export type SupportPipelineConfig = {
   }
   tier2?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
   tier3?: {
-    model?: string; maxToolLoops?: number
-    systemPrompt?: string; branchPrefix?: string
+    model?: string
+    maxToolLoops?: number
+    systemPrompt?: string
+    branchPrefix?: string
     defaultBranch?: string
   }
   tier4?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
@@ -120,7 +123,9 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     token: cfg.github.token,
     repo: cfg.github.repo,
   })
-  const sentryApiConfigured = Boolean(cfg.sentry.apiToken && cfg.sentry.orgSlug && cfg.sentry.projectSlug)
+  const sentryApiConfigured = Boolean(
+    cfg.sentry.apiToken && cfg.sentry.orgSlug && cfg.sentry.projectSlug
+  )
   const sentryClient: SentryClient = sentryApiConfigured
     ? createSentryClient({
         apiToken: cfg.sentry.apiToken,
@@ -128,8 +133,12 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
         projectSlug: cfg.sentry.projectSlug,
       })
     : {
-        getIssue: async () => ({ error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)' }),
-        searchIssues: async () => ({ error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)' }),
+        getIssue: async () => ({
+          error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)',
+        }),
+        searchIssues: async () => ({
+          error: 'Sentry não configurado (apiToken/orgSlug/projectSlug ausentes)',
+        }),
       }
 
   // SSE bus
@@ -180,10 +189,16 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     pickBundle(ghTools, ['create_pr']),
   ])
   const tier4Tools = pickBundle(ghTools, [
-    'read_pr', 'read_pr_files', 'approve_pr', 'merge_pr', 'post_review_comment',
+    'read_pr',
+    'read_pr_files',
+    'approve_pr',
+    'merge_pr',
+    'post_review_comment',
   ])
 
-  // Queue declarado antes dos agents (late-binding via closure)
+  // Declared before the agents so they can capture it via closure (the Tier 2
+  // agent's enqueueTier3 references `queue` before it is assigned below).
+  // biome-ignore lint/style/useConst: late-bound after the agents capture it
   let queue: SupportQueue
 
   // Agents
@@ -244,25 +259,37 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   const sentryWebhookConfigured = Boolean(cfg.sentry.webhookSecret && cfg.sentry.projectSlug)
   const webhooks = {
     github: createGithubWebhookHandler({
-      db: cfg.db, schema, queue, sseBus, githubClient,
+      db: cfg.db,
+      schema,
+      queue,
+      sseBus,
+      githubClient,
       webhookSecret: cfg.github.webhookSecret,
       autoLabel: cfg.github.autoLabel,
     }),
     sentry: sentryWebhookConfigured
       ? createSentryWebhookHandler({
-          db: cfg.db, schema, queue,
+          db: cfg.db,
+          schema,
+          queue,
           webhookSecret: cfg.sentry.webhookSecret,
           projectSlug: cfg.sentry.projectSlug,
         })
-      : (async (_req: any, res: any) => res.status(503).json({
-          error: 'Sentry webhook não configurado (webhookSecret ausente)',
-        })) as ReturnType<typeof createSentryWebhookHandler>,
+      : ((async (_req: Request, res: Response) =>
+          res.status(503).json({
+            error: 'Sentry webhook não configurado (webhookSecret ausente)',
+          })) as ReturnType<typeof createSentryWebhookHandler>),
   }
 
   return {
     schema,
-    tier1, tier2, tier3, tier4,
-    queue, sseBus, webhooks,
+    tier1,
+    tier2,
+    tier3,
+    tier4,
+    queue,
+    sseBus,
+    webhooks,
     clients: { github: githubClient, sentry: sentryClient },
   }
 }

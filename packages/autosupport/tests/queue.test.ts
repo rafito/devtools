@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockBoss = {
   on: vi.fn(),
@@ -28,7 +28,11 @@ describe('createSupportQueue', () => {
     })
     await q.start()
     const created = mockBoss.createQueue.mock.calls.map((c: any) => c[0])
-    expect(created.sort()).toEqual(['support-tier2-investigate', 'support-tier3-fix', 'support-tier4-review'])
+    expect(created.sort()).toEqual([
+      'support-tier2-investigate',
+      'support-tier3-fix',
+      'support-tier4-review',
+    ])
   })
 
   it('start registra work handlers para as 3 filas', async () => {
@@ -38,7 +42,11 @@ describe('createSupportQueue', () => {
     })
     await q.start()
     const workNames = mockBoss.work.mock.calls.map((c: any) => c[0]).sort()
-    expect(workNames).toEqual(['support-tier2-investigate', 'support-tier3-fix', 'support-tier4-review'])
+    expect(workNames).toEqual([
+      'support-tier2-investigate',
+      'support-tier3-fix',
+      'support-tier4-review',
+    ])
   })
 
   it('enqueueTier2 chama send com job correto', async () => {
@@ -52,7 +60,7 @@ describe('createSupportQueue', () => {
     expect(mockBoss.send).toHaveBeenCalledWith(
       'support-tier2-investigate',
       { ticketId: 'ticket-abc' },
-      expect.objectContaining({ retryLimit: expect.any(Number) }),
+      expect.objectContaining({ retryLimit: expect.any(Number) })
     )
   })
 
@@ -64,7 +72,9 @@ describe('createSupportQueue', () => {
     await q.start()
     await q.enqueueTier3('ticket-xyz')
     expect(mockBoss.send).toHaveBeenCalledWith(
-      'support-tier3-fix', { ticketId: 'ticket-xyz' }, expect.any(Object),
+      'support-tier3-fix',
+      { ticketId: 'ticket-xyz' },
+      expect.any(Object)
     )
   })
 
@@ -76,7 +86,9 @@ describe('createSupportQueue', () => {
     await q.start()
     await q.enqueueTier4(42, 'tk1')
     expect(mockBoss.send).toHaveBeenCalledWith(
-      'support-tier4-review', { prNumber: 42, ticketId: 'tk1' }, expect.any(Object),
+      'support-tier4-review',
+      { prNumber: 42, ticketId: 'tk1' },
+      expect.any(Object)
     )
   })
 

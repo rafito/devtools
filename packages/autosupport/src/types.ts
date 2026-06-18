@@ -1,3 +1,12 @@
+/**
+ * The consumer-provided Drizzle database instance the pipeline runs queries
+ * against. Typed as `any` on purpose: the pipeline operates over a caller-owned
+ * schema, and modelling Drizzle's generic query-builder here would force every
+ * tier and webhook signature to carry the caller's schema generics.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: consumer-provided Drizzle db; precise typing would leak schema generics into every signature
+export type SupportDb = any
+
 export type TicketStatus = 'open' | 'investigating' | 'fixing' | 'pr_review' | 'resolved'
 export type TicketSource = 'chat' | 'sentry'
 
@@ -28,9 +37,7 @@ export type ToolDefinition = {
   }
 }
 
-export type ToolExecutor = (
-  input: Record<string, unknown>,
-) => Promise<unknown>
+export type ToolExecutor = (input: Record<string, unknown>) => Promise<unknown>
 
 export type ToolBundle = {
   definitions: ToolDefinition[]

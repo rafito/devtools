@@ -1,10 +1,11 @@
-import type { Request, Response } from 'express'
 import crypto from 'node:crypto'
-import type { SupportSchema } from '../schema/index.js'
+import type { Request, Response } from 'express'
 import type { SupportQueue } from '../queue/index.js'
+import type { SupportSchema } from '../schema/index.js'
+import type { SupportDb } from '../types.js'
 
 export type SentryWebhookDeps = {
-  db: any
+  db: SupportDb
   schema: SupportSchema
   queue: SupportQueue
   webhookSecret: string
@@ -30,7 +31,8 @@ export function createSentryWebhookHandler(deps: SentryWebhookDeps) {
 
     const payload = req.body as Buffer
     if (!Buffer.isBuffer(payload)) return res.status(400).json({ error: 'Payload inválido.' })
-    if (!verifySignature(payload, signature)) return res.status(401).json({ error: 'Assinatura inválida.' })
+    if (!verifySignature(payload, signature))
+      return res.status(401).json({ error: 'Assinatura inválida.' })
 
     const body = JSON.parse(payload.toString('utf8'))
     if (body.action !== 'created') return res.status(200).json({ received: true, handled: false })
@@ -41,13 +43,18 @@ export function createSentryWebhookHandler(deps: SentryWebhookDeps) {
       return res.status(200).json({ received: true, handled: false })
     }
 
-    const description = `[Sentry] ${issue.title}\nCulprit: ${issue.culprit ?? 'desconhecido'}\n${issue.permalink ?? ''}`.trim()
+    const description =
+      `[Sentry] ${issue.title}\nCulprit: ${issue.culprit ?? 'desconhecido'}\n${issue.permalink ?? ''}`.trim()
 
     const [ticket] = await deps.db
       .insert(deps.schema.supportTickets)
       .values({
-        tenantId: null, userId: null, description,
-        source: 'sentry', sentryIssueId: String(issue.id), status: 'open',
+        tenantId: null,
+        userId: null,
+        description,
+        source: 'sentry',
+        sentryIssueId: String(issue.id),
+        status: 'open',
       })
       .returning()
 

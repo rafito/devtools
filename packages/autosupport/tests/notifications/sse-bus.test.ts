@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createSseBus } from '../../src/notifications/sse-bus'
 import type { NotificationEvent } from '../../src/types'
 
@@ -34,7 +34,8 @@ describe('createSseBus', () => {
 
   it('múltiplos listeners no mesmo user todos recebem', () => {
     const bus = createSseBus()
-    const a = vi.fn(), b = vi.fn()
+    const a = vi.fn()
+    const b = vi.fn()
     bus.subscribeUser('u1', a)
     bus.subscribeUser('u1', b)
     bus.notifyUser('u1', event)
@@ -54,7 +55,9 @@ describe('createSseBus', () => {
   it('listener que lança erro não derruba notifyUser', () => {
     const bus = createSseBus()
     const consoleErrSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    bus.subscribeUser('u1', () => { throw new Error('boom') })
+    bus.subscribeUser('u1', () => {
+      throw new Error('boom')
+    })
     const ok = vi.fn()
     bus.subscribeUser('u1', ok)
     bus.notifyUser('u1', event)
@@ -65,7 +68,8 @@ describe('createSseBus', () => {
   it('buses independentes não compartilham estado', () => {
     const a = createSseBus()
     const b = createSseBus()
-    const cbA = vi.fn(), cbB = vi.fn()
+    const cbA = vi.fn()
+    const cbB = vi.fn()
     a.subscribeUser('u1', cbA)
     b.subscribeUser('u1', cbB)
     a.notifyUser('u1', event)

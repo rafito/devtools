@@ -1,9 +1,10 @@
-import type { ToolBundle, ToolDefinition } from '../types.js'
 import type { GitHubClient } from '../clients/github.js'
+import { toErrorMessage } from '../errors.js'
+import type { ToolBundle, ToolDefinition } from '../types.js'
 
 export type GithubToolsConfig = {
   client: GitHubClient
-  autoLabel?: string  // default 'support-auto'
+  autoLabel?: string // default 'support-auto'
 }
 
 export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
@@ -29,7 +30,9 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
       input_schema: {
         type: 'object',
         properties: {
-          title: { type: 'string' }, body: { type: 'string' }, branch: { type: 'string' },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          branch: { type: 'string' },
         },
         required: ['title', 'body', 'branch'],
       },
@@ -58,7 +61,8 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
       input_schema: {
         type: 'object',
         properties: {
-          prNumber: { type: 'number' }, comment: { type: 'string' },
+          prNumber: { type: 'number' },
+          comment: { type: 'string' },
         },
         required: ['prNumber', 'comment'],
       },
@@ -78,7 +82,8 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
       input_schema: {
         type: 'object',
         properties: {
-          prNumber: { type: 'number' }, comment: { type: 'string' },
+          prNumber: { type: 'number' },
+          comment: { type: 'string' },
         },
         required: ['prNumber', 'comment'],
       },
@@ -94,7 +99,9 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
         }
         case 'create_pr': {
           const pr = await cfg.client.createPullRequest(
-            input.title as string, input.body as string, input.branch as string,
+            input.title as string,
+            input.body as string,
+            input.branch as string
           )
           await cfg.client.addLabelsToPR(pr.number, [autoLabel])
           return { prNumber: pr.number, url: pr.html_url }
@@ -102,23 +109,29 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
         case 'read_pr': {
           const pr = await cfg.client.getPullRequest(input.prNumber as number)
           return {
-            number: pr.number, title: pr.title, body: pr.body,
-            branch: pr.head.ref, labels: pr.labels.map((l) => l.name),
+            number: pr.number,
+            title: pr.title,
+            body: pr.body,
+            branch: pr.head.ref,
+            labels: pr.labels.map((l) => l.name),
           }
         }
         case 'read_pr_files': {
           const files = await cfg.client.getPullRequestFiles(input.prNumber as number)
           return {
             files: files.map((f) => ({
-              filename: f.filename, status: f.status,
-              additions: f.additions, deletions: f.deletions,
+              filename: f.filename,
+              status: f.status,
+              additions: f.additions,
+              deletions: f.deletions,
               patch: f.patch?.slice(0, 2000),
             })),
           }
         }
         case 'approve_pr': {
           const r = await cfg.client.approvePullRequest(
-            input.prNumber as number, input.comment as string,
+            input.prNumber as number,
+            input.comment as string
           )
           return { approved: true, reviewId: r.id }
         }
@@ -133,11 +146,12 @@ export function createGithubTools(cfg: GithubToolsConfig): ToolBundle {
           await cfg.client.postPullRequestComment(input.prNumber as number, comment)
           return { posted: true }
         }
-        default: return { error: `Ferramenta desconhecida: ${name}` }
+        default:
+          return { error: `Ferramenta desconhecida: ${name}` }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[autosupport-github-tools]', err)
-      return { error: err.message }
+      return { error: toErrorMessage(err) }
     }
   }
 

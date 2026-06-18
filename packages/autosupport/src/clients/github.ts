@@ -56,7 +56,7 @@ export function createGitHubClient(config: { token: string; repo: string }) {
   async function createIssue(
     title: string,
     body: string,
-    labels: string[] = ['bug', 'support'],
+    labels: string[] = ['bug', 'support']
   ): Promise<GitHubIssue> {
     const response = await fetch(`${base}/issues`, {
       method: 'POST',
@@ -150,7 +150,7 @@ export function createGitHubClient(config: { token: string; repo: string }) {
     title: string,
     body: string,
     branch: string,
-    baseBranch = 'main',
+    baseBranch = 'main'
   ): Promise<{ number: number; html_url: string; title: string }> {
     const response = await fetch(`${base}/pulls`, {
       method: 'POST',

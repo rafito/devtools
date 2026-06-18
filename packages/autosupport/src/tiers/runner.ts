@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { toErrorMessage } from '../errors.js'
 import type { ToolBundle } from '../types.js'
 
 export type ToolLoopOptions = {
@@ -21,10 +22,10 @@ export type ToolLoopResult = {
 
 export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult> {
   const messages = [...opts.initialMessages]
-  const anthroTools = opts.tools.definitions.map((t) => ({
+  const anthroTools: Anthropic.Tool[] = opts.tools.definitions.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: t.input_schema as any,
+    input_schema: t.input_schema as Anthropic.Tool.InputSchema,
   }))
 
   let loops = 0
@@ -58,8 +59,8 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         let result: unknown
         try {
           result = await opts.tools.execute(block.name, block.input as Record<string, unknown>)
-        } catch (err: any) {
-          result = { error: `Tool execution failed: ${err.message}` }
+        } catch (err) {
+          result = { error: `Tool execution failed: ${toErrorMessage(err)}` }
         }
         opts.onToolResult?.(block.name, block.input as Record<string, unknown>, result)
         toolResults.push({

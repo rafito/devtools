@@ -23,9 +23,13 @@ export function createSseBus() {
   function notifyUser(userId: string, event: NotificationEvent): void {
     const set = userSubscribers.get(userId)
     if (!set) return
-    set.forEach((l) => {
-      try { l(event) } catch (err) { console.error('[autosupport-sse-bus]', err) }
-    })
+    for (const l of set) {
+      try {
+        l(event)
+      } catch (err) {
+        console.error('[autosupport-sse-bus]', err)
+      }
+    }
   }
 
   function hasActiveListener(userId: string): boolean {

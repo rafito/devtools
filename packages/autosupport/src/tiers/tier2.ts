@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
-import type { ToolBundle } from '../types.js'
+import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
 import { runToolLoop } from './runner.js'
 
@@ -10,7 +10,7 @@ export type Tier2Config = {
   model?: string
   maxToolLoops?: number
   systemPrompt?: string
-  db: any
+  db: SupportDb
   schema: SupportSchema
   tools: ToolBundle
   enqueueTier3: (ticketId: string) => Promise<unknown>
@@ -75,8 +75,9 @@ export function createTier2Agent(cfg: Tier2Config) {
       initialMessages: initial,
       tools: cfg.tools,
       onToolResult: (name, _input, result) => {
-        if (name === 'create_github_issue' && (result as any).issueNumber) {
-          githubIssueId = (result as any).issueNumber
+        const issue = result as { issueNumber?: number }
+        if (name === 'create_github_issue' && issue.issueNumber) {
+          githubIssueId = issue.issueNumber
         }
       },
     })

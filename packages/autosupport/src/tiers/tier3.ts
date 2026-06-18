@@ -3,8 +3,9 @@ import { promisify } from 'node:util'
 import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { GitHubClient } from '../clients/github.js'
+import { toErrorMessage } from '../errors.js'
 import type { SupportSchema } from '../schema/index.js'
-import type { ToolBundle } from '../types.js'
+import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
 import { runToolLoop } from './runner.js'
 
@@ -16,7 +17,7 @@ export type Tier3Config = {
   maxToolLoops?: number
   systemPrompt?: string
   branchPrefix?: string
-  db: any
+  db: SupportDb
   schema: SupportSchema
   tools: ToolBundle
   /** Cliente GitHub usado para postar comentário na issue quando Tier 3 falha. */
@@ -57,8 +58,10 @@ export async function cleanupTier3Failure(
   for (const [cmd, args] of ops) {
     try {
       await execFileAsync(cmd, args, { cwd: rootDir })
-    } catch (err: any) {
-      console.warn(`[autosupport-tier3-cleanup] ${cmd} ${args.join(' ')} failed: ${err.message}`)
+    } catch (err) {
+      console.warn(
+        `[autosupport-tier3-cleanup] ${cmd} ${args.join(' ')} failed: ${toErrorMessage(err)}`
+      )
     }
   }
 }
@@ -88,8 +91,8 @@ export function createTier3Agent(cfg: Tier3Config) {
         content: [
           `Ticket ID: ${ticketId}`,
           `GitHub Issue: #${ticket.githubIssueId}`,
-          ``,
-          `Descrição:`,
+          '',
+          'Descrição:',
           ticket.description,
           transcript ? `\nConversa com o cliente (chat de suporte):\n\n${transcript}` : null,
           `\nInvestigue, aplique o fix e crie o PR. Branch sugerida: ${branchPrefix}${ticketId.slice(0, 8)}`,
@@ -107,16 +110,16 @@ export function createTier3Agent(cfg: Tier3Config) {
       initialMessages: initial,
       tools: cfg.tools,
       onToolResult: (name, input, result) => {
-        if (name === 'create_pr' && (result as any)?.prNumber) {
-          prNumber = (result as any).prNumber
+        const r = result as { prNumber?: number; success?: boolean }
+        const args = input as { path?: string; name?: string }
+        if (name === 'create_pr' && r?.prNumber) {
+          prNumber = r.prNumber
         }
-        if (name === 'write_file' && (result as any)?.success) {
-          const path = (input as any)?.path
-          if (typeof path === 'string') writtenFiles.push(path)
+        if (name === 'write_file' && r?.success) {
+          if (typeof args?.path === 'string') writtenFiles.push(args.path)
         }
-        if (name === 'git_branch' && (result as any)?.success) {
-          const branchName = (input as any)?.name
-          if (typeof branchName === 'string') branchesCreated.push(branchName)
+        if (name === 'git_branch' && r?.success) {
+          if (typeof args?.name === 'string') branchesCreated.push(args.name)
         }
       },
     })
@@ -144,8 +147,8 @@ export function createTier3Agent(cfg: Tier3Config) {
           'Reabra ou comente para reenfileirar Tier 3.',
         ].filter((l): l is string => l !== null)
         await cfg.githubClient.postIssueComment(ticket.githubIssueId, lines.join('\n'))
-      } catch (err: any) {
-        console.warn('[autosupport-tier3] failed to post failure comment:', err?.message ?? err)
+      } catch (err) {
+        console.warn('[autosupport-tier3] failed to post failure comment:', toErrorMessage(err))
       }
     }
 

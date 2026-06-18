@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import crypto from 'node:crypto'
 import express from 'express'
 import request from 'supertest'
-import crypto from 'node:crypto'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSentryWebhookHandler } from '../../src/webhooks/sentry'
 
 const SECRET = 'shh'
@@ -27,8 +27,11 @@ function makeDeps() {
 function makeApp(deps: any) {
   const app = express()
   const handler = createSentryWebhookHandler({
-    db: deps.db, schema: deps.schema, queue: deps.queue,
-    webhookSecret: SECRET, projectSlug: 'facefutura',
+    db: deps.db,
+    schema: deps.schema,
+    queue: deps.queue,
+    webhookSecret: SECRET,
+    projectSlug: 'facefutura',
   })
   app.post('/wh', express.raw({ type: 'application/json' }), handler)
   return app
@@ -40,20 +43,32 @@ function sig(body: string): string {
 
 describe('createSentryWebhookHandler', () => {
   let deps: ReturnType<typeof makeDeps>
-  beforeEach(() => { deps = makeDeps() })
+  beforeEach(() => {
+    deps = makeDeps()
+  })
 
   it('webhookSecret vazio lança', () => {
-    expect(() => createSentryWebhookHandler({
-      db: {}, schema: {} as any, queue: {} as any,
-      webhookSecret: '', projectSlug: 'p',
-    })).toThrow(/webhookSecret/)
+    expect(() =>
+      createSentryWebhookHandler({
+        db: {},
+        schema: {} as any,
+        queue: {} as any,
+        webhookSecret: '',
+        projectSlug: 'p',
+      })
+    ).toThrow(/webhookSecret/)
   })
 
   it('projectSlug vazio lança', () => {
-    expect(() => createSentryWebhookHandler({
-      db: {}, schema: {} as any, queue: {} as any,
-      webhookSecret: 's', projectSlug: '',
-    })).toThrow(/projectSlug/)
+    expect(() =>
+      createSentryWebhookHandler({
+        db: {},
+        schema: {} as any,
+        queue: {} as any,
+        webhookSecret: 's',
+        projectSlug: '',
+      })
+    ).toThrow(/projectSlug/)
   })
 
   it('sem assinatura → 401', async () => {
@@ -65,7 +80,8 @@ describe('createSentryWebhookHandler', () => {
   it('assinatura inválida → 401', async () => {
     const app = makeApp(deps)
     const body = JSON.stringify({ action: 'created' })
-    const r = await request(app).post('/wh')
+    const r = await request(app)
+      .post('/wh')
       .set('sentry-hook-signature', 'xx')
       .set('Content-Type', 'application/json')
       .send(body)
@@ -103,10 +119,15 @@ describe('createSentryWebhookHandler', () => {
     const app = makeApp(deps)
     const body = JSON.stringify({
       action: 'created',
-      data: { issue: {
-        id: 'sentry-abc', title: 'TypeError', culprit: 'a.ts',
-        permalink: 'https://sentry/x', project: { slug: 'facefutura' },
-      }},
+      data: {
+        issue: {
+          id: 'sentry-abc',
+          title: 'TypeError',
+          culprit: 'a.ts',
+          permalink: 'https://sentry/x',
+          project: { slug: 'facefutura' },
+        },
+      },
     })
     const r = await request(app)
       .post('/wh')

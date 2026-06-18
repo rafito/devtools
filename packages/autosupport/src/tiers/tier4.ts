@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
-import type { ToolBundle } from '../types.js'
+import type { SupportDb, ToolBundle } from '../types.js'
 import { runToolLoop } from './runner.js'
 
 export type Tier4Config = {
@@ -9,7 +9,7 @@ export type Tier4Config = {
   model?: string
   maxToolLoops?: number
   systemPrompt?: string
-  db: any
+  db: SupportDb
   schema: SupportSchema
   tools: ToolBundle
 }

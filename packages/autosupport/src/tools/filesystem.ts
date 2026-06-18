@@ -1,7 +1,8 @@
+import { execFile } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { toErrorMessage } from '../errors.js'
 import type { ToolBundle, ToolDefinition } from '../types.js'
 
 const execFileAsync = promisify(execFile)
@@ -32,10 +33,13 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
   const definitions: ToolDefinition[] = [
     {
       name: 'read_file',
-      description: 'Lê o conteúdo de um arquivo do codebase. Use para entender o código relevante ao bug.',
+      description:
+        'Lê o conteúdo de um arquivo do codebase. Use para entender o código relevante ao bug.',
       input_schema: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'Caminho relativo ao root do projeto' } },
+        properties: {
+          path: { type: 'string', description: 'Caminho relativo ao root do projeto' },
+        },
         required: ['path'],
       },
     },
@@ -53,7 +57,8 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
     },
     {
       name: 'write_file',
-      description: 'Escreve conteúdo em um arquivo do codebase. Arquivos protegidos não podem ser modificados.',
+      description:
+        'Escreve conteúdo em um arquivo do codebase. Arquivos protegidos não podem ser modificados.',
       input_schema: {
         type: 'object',
         properties: { path: { type: 'string' }, content: { type: 'string' } },
@@ -69,22 +74,28 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
           const resolved = safeResolvePath(input.path as string)
           const content = await fs.readFile(resolved, 'utf8')
           return { content: content.slice(0, 8000) }
-        } catch (err: any) {
+        } catch (err) {
           console.error('[autosupport-fs]', err)
-          return { error: err.message }
+          return { error: toErrorMessage(err) }
         }
       }
       case 'search_code': {
         try {
           const dir = safeResolvePath((input.directory as string) ?? '.')
           const { stdout } = await execFileAsync('grep', [
-            '-r', '--include=*.ts', '-n', '--max-count=20', input.query as string, dir,
+            '-r',
+            '--include=*.ts',
+            '-n',
+            '--max-count=20',
+            input.query as string,
+            dir,
           ])
           return { matches: stdout.slice(0, 4000) }
-        } catch (err: any) {
-          if (err.code === 1) return { matches: '(nenhum resultado)' }
+        } catch (err) {
+          // grep exits 1 when there are no matches — not an error here.
+          if ((err as { code?: number }).code === 1) return { matches: '(nenhum resultado)' }
           console.error('[autosupport-fs]', err)
-          return { error: err.message }
+          return { error: toErrorMessage(err) }
         }
       }
       case 'write_file': {
@@ -95,12 +106,13 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
           await fs.mkdir(path.dirname(resolved), { recursive: true })
           await fs.writeFile(resolved, input.content as string, 'utf8')
           return { success: true }
-        } catch (err: any) {
+        } catch (err) {
           console.error('[autosupport-fs]', err)
-          return { error: err.message }
+          return { error: toErrorMessage(err) }
         }
       }
-      default: return { error: `Ferramenta desconhecida: ${name}` }
+      default:
+        return { error: `Ferramenta desconhecida: ${name}` }
     }
   }
 

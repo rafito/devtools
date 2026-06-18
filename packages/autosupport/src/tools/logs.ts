@@ -1,5 +1,5 @@
-import * as path from 'node:path'
 import { execFile } from 'node:child_process'
+import * as path from 'node:path'
 import { promisify } from 'node:util'
 import type { ToolBundle, ToolDefinition } from '../types.js'
 
@@ -15,17 +15,19 @@ export function createLogsTool(cfg: LogsToolConfig): ToolBundle {
   const maxLines = cfg.maxLines ?? 500
   const logFile = path.resolve(cfg.logFilePath)
 
-  const definitions: ToolDefinition[] = [{
-    name: 'read_logs',
-    description: 'Lê as últimas linhas do log do servidor para encontrar erros recentes.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        lines: { type: 'number', description: 'Quantas linhas ler (padrão: 100)' },
-        filter: { type: 'string', description: 'Filtrar linhas que contenham este texto' },
+  const definitions: ToolDefinition[] = [
+    {
+      name: 'read_logs',
+      description: 'Lê as últimas linhas do log do servidor para encontrar erros recentes.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          lines: { type: 'number', description: 'Quantas linhas ler (padrão: 100)' },
+          filter: { type: 'string', description: 'Filtrar linhas que contenham este texto' },
+        },
       },
     },
-  }]
+  ]
 
   async function execute(name: string, input: Record<string, unknown>): Promise<unknown> {
     if (name !== 'read_logs') return { error: `Ferramenta desconhecida: ${name}` }
@@ -34,7 +36,10 @@ export function createLogsTool(cfg: LogsToolConfig): ToolBundle {
     try {
       const { stdout } = await execFileAsync('tail', ['-n', String(lines), logFile])
       const result = filter
-        ? stdout.split('\n').filter((l) => l.includes(filter)).join('\n')
+        ? stdout
+            .split('\n')
+            .filter((l) => l.includes(filter))
+            .join('\n')
         : stdout
       return { logs: result.slice(0, 6000) }
     } catch (err) {

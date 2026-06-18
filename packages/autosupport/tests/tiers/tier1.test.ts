@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolBundle, UserContext } from '../../src/types'
 
 const userCtx: UserContext = {
@@ -58,7 +58,7 @@ describe('createTier1Agent', () => {
         db: {},
         schema,
         systemPromptBuilder: () => 'sys',
-      }),
+      })
     ).toThrow(/anthropicApiKey/)
   })
 
@@ -102,7 +102,7 @@ describe('createTier1Agent', () => {
       systemPromptBuilder: () => 'sys',
     })
     await expect(
-      agent.run({ message: 'oi', conversationId: 'conv-new', userContext: userCtx }),
+      agent.run({ message: 'oi', conversationId: 'conv-new', userContext: userCtx })
     ).resolves.toBeDefined()
   })
 
@@ -124,7 +124,11 @@ describe('createTier1Agent', () => {
       schema,
       systemPromptBuilder: () => 'sys',
     })
-    const result = await agent.run({ message: 'oi', conversationId: 'conv-3', userContext: userCtx })
+    const result = await agent.run({
+      message: 'oi',
+      conversationId: 'conv-3',
+      userContext: userCtx,
+    })
     expect(result.text).toContain('Desculpe')
   })
 
@@ -132,7 +136,8 @@ describe('createTier1Agent', () => {
     const Anthropic = (await import('@anthropic-ai/sdk')).default as any
     Anthropic.mockImplementation(() => ({
       messages: {
-        create: vi.fn()
+        create: vi
+          .fn()
           .mockResolvedValueOnce({
             stop_reason: 'tool_use',
             content: [
@@ -166,7 +171,11 @@ describe('createTier1Agent', () => {
       systemPromptBuilder: () => 'sys',
       maxToolLoops: 3,
     })
-    const result = await agent.run({ message: 'tenho um bug', conversationId: 'conv-4', userContext: userCtx })
+    const result = await agent.run({
+      message: 'tenho um bug',
+      conversationId: 'conv-4',
+      userContext: userCtx,
+    })
     expect(result.ticketId).toBe('tk-abc')
     expect(result.text).toBe('Ticket criado.')
   })
@@ -182,7 +191,7 @@ describe('createTier1Agent', () => {
       systemPromptBuilder: () => 'sys',
     })
     await expect(
-      agent.run({ message: 'oi', conversationId: 'conv-5', userContext: userCtx }),
+      agent.run({ message: 'oi', conversationId: 'conv-5', userContext: userCtx })
     ).resolves.toBeDefined()
   })
 
@@ -196,7 +205,7 @@ describe('createTier1Agent', () => {
       // no customTools
     })
     await expect(
-      agent.run({ message: 'oi', conversationId: 'conv-6', userContext: userCtx }),
+      agent.run({ message: 'oi', conversationId: 'conv-6', userContext: userCtx })
     ).resolves.toBeDefined()
   })
 

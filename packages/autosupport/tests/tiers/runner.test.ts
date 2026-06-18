@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { runToolLoop } from '../../src/tiers/runner'
 import type { ToolBundle } from '../../src/types'
 
@@ -142,7 +142,7 @@ describe('runToolLoop', () => {
     expect(onResult).toHaveBeenCalledWith(
       'test_tool',
       {},
-      expect.objectContaining({ error: expect.stringContaining('boom') }),
+      expect.objectContaining({ error: expect.stringContaining('boom') })
     )
   })
 

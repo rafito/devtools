@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
-import type { ToolBundle, UserContext, AgentResult } from '../types.js'
+import type { AgentResult, SupportDb, ToolBundle, UserContext } from '../types.js'
 import { runToolLoop } from './runner.js'
 
 type StoredMessage = { role: 'user' | 'assistant'; content: string; ts: string }
@@ -12,7 +12,7 @@ export type Tier1Config = {
   maxToolLoops?: number
   systemPromptBuilder: (ctx: UserContext) => string
   customTools?: ToolBundle
-  db: any
+  db: SupportDb
   schema: SupportSchema
 }
 
@@ -39,7 +39,7 @@ export function createTier1Agent(cfg: Tier1Config) {
   async function saveMessage(
     conversationId: string,
     role: 'user' | 'assistant',
-    content: string,
+    content: string
   ): Promise<void> {
     const [conv] = await cfg.db
       .select({ messages: cfg.schema.supportConversations.messages })
@@ -58,10 +58,7 @@ export function createTier1Agent(cfg: Tier1Config) {
     const history = await loadHistory(conversationId)
     await saveMessage(conversationId, 'user', message)
 
-    const initial: Anthropic.MessageParam[] = [
-      ...history,
-      { role: 'user', content: message },
-    ]
+    const initial: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }]
 
     let ticketId: string | undefined
     const result = await runToolLoop({
@@ -76,12 +73,12 @@ export function createTier1Agent(cfg: Tier1Config) {
         execute: async () => ({ error: 'no tools' }),
       },
       onToolResult: (name, _input, r) => {
-        if (name === 'create_ticket' && (r as any).ticketId) ticketId = (r as any).ticketId
+        const ticket = r as { ticketId?: string }
+        if (name === 'create_ticket' && ticket.ticketId) ticketId = ticket.ticketId
       },
     })
 
-    const text =
-      result.text || 'Desculpe, não consegui processar sua solicitação. Tente novamente.'
+    const text = result.text || 'Desculpe, não consegui processar sua solicitação. Tente novamente.'
     await saveMessage(conversationId, 'assistant', text)
     return { text, conversationId, ticketId }
   }

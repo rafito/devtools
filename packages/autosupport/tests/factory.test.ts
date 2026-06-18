@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createSupportPipeline } from '../src/factory'
 import type { UserContext } from '../src/types'
 
@@ -65,7 +65,13 @@ describe('createSupportPipeline', () => {
 
   it('aceita customTools no tier1', () => {
     const customTools = {
-      definitions: [{ name: 'read_data', description: 'd', input_schema: { type: 'object' as const, properties: {} } }],
+      definitions: [
+        {
+          name: 'read_data',
+          description: 'd',
+          input_schema: { type: 'object' as const, properties: {} },
+        },
+      ],
       execute: vi.fn(),
     }
     const p = createSupportPipeline({
@@ -92,16 +98,20 @@ describe('createSupportPipeline', () => {
   })
 
   it('lança se github.token vazio', () => {
-    expect(() => createSupportPipeline({
-      ...baseConfig,
-      github: { ...baseConfig.github, token: '' },
-    })).toThrow()
+    expect(() =>
+      createSupportPipeline({
+        ...baseConfig,
+        github: { ...baseConfig.github, token: '' },
+      })
+    ).toThrow()
   })
 
   it('lança se anthropicApiKey vazio', () => {
-    expect(() => createSupportPipeline({
-      ...baseConfig,
-      anthropicApiKey: '',
-    })).toThrow()
+    expect(() =>
+      createSupportPipeline({
+        ...baseConfig,
+        anthropicApiKey: '',
+      })
+    ).toThrow()
   })
 })

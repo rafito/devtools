@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { toErrorMessage } from '../errors.js'
 import type { ToolBundle, ToolDefinition } from '../types.js'
 
 const execFileAsync = promisify(execFile)
@@ -51,10 +52,11 @@ export function createGitTools(cfg: GitToolsConfig): ToolBundle {
           const files = input.files as string[]
           const message = input.message as string
           const branch = input.branch as string
-          await execFileAsync('git', [
-            'remote', 'set-url', 'origin',
-            `https://${cfg.token}@github.com/${cfg.repo}.git`,
-          ], { cwd: cfg.rootDir })
+          await execFileAsync(
+            'git',
+            ['remote', 'set-url', 'origin', `https://${cfg.token}@github.com/${cfg.repo}.git`],
+            { cwd: cfg.rootDir }
+          )
           await execFileAsync('git', ['add', '--', ...files], { cwd: cfg.rootDir })
           await execFileAsync('git', ['commit', '-m', message], { cwd: cfg.rootDir })
           await execFileAsync('git', ['push', 'origin', branch], { cwd: cfg.rootDir })
@@ -63,8 +65,8 @@ export function createGitTools(cfg: GitToolsConfig): ToolBundle {
         default:
           return { error: `Ferramenta desconhecida: ${name}` }
       }
-    } catch (err: any) {
-      const sanitized = (err.message ?? '').split(cfg.token).join('***')
+    } catch (err) {
+      const sanitized = toErrorMessage(err).split(cfg.token).join('***')
       console.error('[autosupport-git]', sanitized)
       return { error: sanitized }
     }

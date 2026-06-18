@@ -1,20 +1,22 @@
-import { pgEnum, pgTable, text, integer, uuid, timestamp, jsonb } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
+import { integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
 export type CreateSchemaOptions = {
-  tablePrefix?: string  // default ''
+  tablePrefix?: string // default ''
 }
 
 export function createSupportSchema(opts: CreateSchemaOptions = {}) {
   const p = opts.tablePrefix ?? ''
 
   const supportTicketStatusEnum = pgEnum(`${p}support_ticket_status`, [
-    'open', 'investigating', 'fixing', 'pr_review', 'resolved',
+    'open',
+    'investigating',
+    'fixing',
+    'pr_review',
+    'resolved',
   ])
 
-  const supportTicketSourceEnum = pgEnum(`${p}support_ticket_source`, [
-    'chat', 'sentry',
-  ])
+  const supportTicketSourceEnum = pgEnum(`${p}support_ticket_source`, ['chat', 'sentry'])
 
   const supportConversations = pgTable(`${p}support_conversations`, {
     id: uuid('id').primaryKey().defaultRandom(),

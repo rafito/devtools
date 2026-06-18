@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
+import type { SupportDb } from '../types.js'
 
 type StoredMessage = { role: string; content: string; ts?: string }
 
@@ -20,7 +21,7 @@ const ROLE_LABELS: Record<string, string> = {
  * inexistente, ou sem mensagens — pra que o chamador simplesmente omita a seção.
  */
 export async function loadConversationTranscript(
-  db: any,
+  db: SupportDb,
   schema: SupportSchema,
   conversationId: string | null | undefined
 ): Promise<string | null> {

@@ -1,7 +1,11 @@
-import { describe, it, expectTypeOf } from 'vitest'
+import { describe, expectTypeOf, it } from 'vitest'
 import type {
-  TicketStatus, TicketSource, SupportTicketRow, ToolDefinition,
-  UserContext, AgentResult,
+  AgentResult,
+  SupportTicketRow,
+  TicketSource,
+  TicketStatus,
+  ToolDefinition,
+  UserContext,
 } from '../src/types'
 
 describe('types', () => {

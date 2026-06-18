@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGitHubClient } from '../../src/clients/github'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
-beforeEach(() => { mockFetch.mockReset() })
+beforeEach(() => {
+  mockFetch.mockReset()
+})
 
 describe('createGitHubClient', () => {
   it('createIssue chama POST /issues com headers corretos', async () => {
@@ -22,13 +24,11 @@ describe('createGitHubClient', () => {
   })
 
   it('throw em repo inválido', () => {
-    expect(() => createGitHubClient({ token: 't', repo: 'sem-barra' }))
-      .toThrow(/owner\/repo/)
+    expect(() => createGitHubClient({ token: 't', repo: 'sem-barra' })).toThrow(/owner\/repo/)
   })
 
   it('throw com token vazio', () => {
-    expect(() => createGitHubClient({ token: '', repo: 'o/r' }))
-      .toThrow(/GITHUB_TOKEN/)
+    expect(() => createGitHubClient({ token: '', repo: 'o/r' })).toThrow(/GITHUB_TOKEN/)
   })
 
   it('createIssue propaga erro de API', async () => {
@@ -40,7 +40,14 @@ describe('createGitHubClient', () => {
   it('getPullRequest faz GET /pulls/{n}', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ number: 7, title: 'p', body: '', head: { ref: 'br', sha: 's' }, labels: [], html_url: 'u' }),
+      json: async () => ({
+        number: 7,
+        title: 'p',
+        body: '',
+        head: { ref: 'br', sha: 's' },
+        labels: [],
+        html_url: 'u',
+      }),
     })
     const gh = createGitHubClient({ token: 't', repo: 'o/r' })
     const pr = await gh.getPullRequest(7)
