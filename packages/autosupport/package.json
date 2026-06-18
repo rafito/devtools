@@ -49,6 +49,11 @@
     "test:watch": "vitest",
     "lint": "biome check ."
   },
+  "dependencies": {
+    "ai": "^5.0.0",
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0"
+  },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.90.0",
     "@sentry/node": ">=10.0.0",
