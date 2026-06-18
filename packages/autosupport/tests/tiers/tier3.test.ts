@@ -22,7 +22,9 @@ function makeTools(): ToolBundle {
 }
 
 function makeLlm(
-  impl?: (opts: LlmRunOptions) => Promise<{ text: string; steps: number; finishReason: string | null }>
+  impl?: (
+    opts: LlmRunOptions
+  ) => Promise<{ text: string; steps: number; finishReason: string | null }>
 ): LlmProvider & { calls: LlmRunOptions[] } {
   const calls: LlmRunOptions[] = []
   return {
