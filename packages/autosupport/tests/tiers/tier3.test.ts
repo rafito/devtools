@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LlmProvider, LlmRunOptions } from '../../src/llm/types'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -20,22 +21,24 @@ function makeTools(): ToolBundle {
   return { definitions: [], execute: vi.fn().mockResolvedValue({}) }
 }
 
+function makeLlm(
+  impl?: (
+    opts: LlmRunOptions
+  ) => Promise<{ text: string; steps: number; finishReason: string | null }>
+): LlmProvider & { calls: LlmRunOptions[] } {
+  const calls: LlmRunOptions[] = []
+  return {
+    calls,
+    runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+      calls.push(opts)
+      return impl ? await impl(opts) : { text: 'done', steps: 0, finishReason: 'stop' }
+    }),
+  }
+}
+
 const schema = {
   supportTickets: { id: 'col-id', githubPrId: 'col' },
 } as any
-
-vi.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: 'done' }],
-        }),
-      },
-    })),
-  }
-})
 
 // Mock execFile para testar cleanup sem rodar git de verdade.
 const execFileMock = vi.fn((_cmd: string, _args: string[], _opts: any, cb: any) => {
@@ -69,20 +72,9 @@ describe('createTier3Agent', () => {
     )
   })
 
-  it('apiKey vazia lança', () => {
-    expect(() =>
-      createTier3Agent({
-        anthropicApiKey: '',
-        db: {},
-        schema,
-        tools: makeTools(),
-      })
-    ).toThrow(/anthropicApiKey/)
-  })
-
   it('ticket inexistente lança', async () => {
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db: makeDb(null),
       schema,
       tools: makeTools(),
@@ -93,7 +85,7 @@ describe('createTier3Agent', () => {
   it('idempotência: skip se já tem githubPrId', async () => {
     const db = makeDb({ id: 'tk-1', githubPrId: 55, githubIssueId: 10, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -105,7 +97,7 @@ describe('createTier3Agent', () => {
   it('happy path sem PR criado: status volta para investigating', async () => {
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 10, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -117,22 +109,6 @@ describe('createTier3Agent', () => {
   })
 
   it('happy path com PR criado: status muda para fixing', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [{ type: 'tool_use', id: 'x1', name: 'create_pr', input: {} }],
-          })
-          .mockResolvedValue({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: 'done' }],
-          }),
-      },
-    }))
-
     const toolsWithPr: ToolBundle = {
       definitions: [
         { name: 'create_pr', description: 'd', input_schema: { type: 'object', properties: {} } },
@@ -140,9 +116,15 @@ describe('createTier3Agent', () => {
       execute: vi.fn().mockResolvedValueOnce({ prNumber: 77 }).mockResolvedValue({}),
     }
 
+    const llm = makeLlm(async (opts) => {
+      const r = await opts.tools.execute('create_pr', {})
+      opts.onToolResult?.('create_pr', {}, r)
+      return { text: 'done', steps: 1, finishReason: 'stop' }
+    })
+
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 10, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools: toolsWithPr,
@@ -155,22 +137,6 @@ describe('createTier3Agent', () => {
   })
 
   it('happy path com PR criado: NÃO posta comment de falha NEM faz cleanup', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [{ type: 'tool_use', id: 'x1', name: 'create_pr', input: {} }],
-          })
-          .mockResolvedValue({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: 'done' }],
-          }),
-      },
-    }))
-
     const toolsWithPr: ToolBundle = {
       definitions: [
         { name: 'create_pr', description: 'd', input_schema: { type: 'object', properties: {} } },
@@ -178,10 +144,16 @@ describe('createTier3Agent', () => {
       execute: vi.fn().mockResolvedValueOnce({ prNumber: 77 }).mockResolvedValue({}),
     }
 
+    const llm = makeLlm(async (opts) => {
+      const r = await opts.tools.execute('create_pr', {})
+      opts.onToolResult?.('create_pr', {}, r)
+      return { text: 'done', steps: 1, finishReason: 'stop' }
+    })
+
     const gh = makeGithubClientMock()
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 10, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools: toolsWithPr,
@@ -195,36 +167,7 @@ describe('createTier3Agent', () => {
   })
 
   it('falha (sem PR) com githubClient + rootDir: posta comment e roda cleanup', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
     // Simula uma branch criada + um write_file feito, sem nunca chamar create_pr.
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [
-              {
-                type: 'tool_use',
-                id: 'b1',
-                name: 'git_branch',
-                input: { name: 'support/fix-abc' },
-              },
-            ],
-          })
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [
-              { type: 'tool_use', id: 'w1', name: 'write_file', input: { path: 'src/foo.ts' } },
-            ],
-          })
-          .mockResolvedValue({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: 'não consegui' }],
-          }),
-      },
-    }))
-
     const tools: ToolBundle = {
       definitions: [
         { name: 'git_branch', description: 'd', input_schema: { type: 'object', properties: {} } },
@@ -237,10 +180,18 @@ describe('createTier3Agent', () => {
         .mockResolvedValue({}),
     }
 
+    const llm = makeLlm(async (opts) => {
+      const r1 = await opts.tools.execute('git_branch', { name: 'support/fix-abc' })
+      opts.onToolResult?.('git_branch', { name: 'support/fix-abc' }, r1)
+      const r2 = await opts.tools.execute('write_file', { path: 'src/foo.ts' })
+      opts.onToolResult?.('write_file', { path: 'src/foo.ts' }, r2)
+      return { text: 'não consegui', steps: 2, finishReason: 'stop' }
+    })
+
     const gh = makeGithubClientMock()
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 42, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools,
@@ -275,7 +226,7 @@ describe('createTier3Agent', () => {
     const gh = makeGithubClientMock()
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 7, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -296,7 +247,7 @@ describe('createTier3Agent', () => {
     const gh = makeGithubClientMock()
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 9, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -312,7 +263,7 @@ describe('createTier3Agent', () => {
   it('falha sem githubClient: cleanup roda mas comment é pulado', async () => {
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 11, description: 'bug' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -339,7 +290,7 @@ describe('createTier3Agent', () => {
   it('custom branchPrefix é aceito', async () => {
     const db = makeDb({ id: 'abcdefgh-xyz', githubPrId: null, githubIssueId: 5, description: 'b' })
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       branchPrefix: 'hotfix/',
       db,
       schema,
@@ -348,27 +299,21 @@ describe('createTier3Agent', () => {
     await expect(agent.run('abcdefgh-xyz')).resolves.toBeUndefined()
   })
 
-  it('custom model e maxToolLoops são aceitos sem erros', async () => {
+  it('maxToolLoops customizado é aceito sem erros', async () => {
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 5, description: 'b' })
+    const llm = makeLlm()
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
-      model: 'claude-sonnet-4-6',
+      llm,
       maxToolLoops: 4,
       db,
       schema,
       tools: makeTools(),
     })
     await expect(agent.run('tk-1')).resolves.toBeUndefined()
+    expect(llm.calls[0].maxToolLoops).toBe(4)
   })
 
   it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    const createMock = vi.fn().mockResolvedValue({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: 'done' }],
-    })
-    Anthropic.mockImplementation(() => ({ messages: { create: createMock } }))
-
     const ticket = {
       id: 'tk-1',
       githubPrId: null,
@@ -396,8 +341,9 @@ describe('createTier3Agent', () => {
       supportConversations: { id: 'c', messages: 'c' },
     } as any
 
+    const llm = makeLlm()
     const agent = createTier3Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema: schemaWithConv,
       tools: makeTools(),
@@ -405,9 +351,8 @@ describe('createTier3Agent', () => {
     })
     await agent.run('tk-1')
 
-    const sentMessages = createMock.mock.calls[0][0].messages
-    expect(sentMessages[0].content).toMatch(/Conversa com o cliente/)
-    expect(sentMessages[0].content).toMatch(/\*\*Cliente:\*\* o filtro de data quebra/)
-    expect(sentMessages[0].content).toMatch(/\*\*Suporte:\*\* qual intervalo/)
+    expect(llm.calls[0].messages[0].content).toMatch(/Conversa com o cliente/)
+    expect(llm.calls[0].messages[0].content).toMatch(/\*\*Cliente:\*\* o filtro de data quebra/)
+    expect(llm.calls[0].messages[0].content).toMatch(/\*\*Suporte:\*\* qual intervalo/)
   })
 })

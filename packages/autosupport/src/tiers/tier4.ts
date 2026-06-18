@@ -1,12 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
+import type { LlmMessage, LlmProvider } from '../llm/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
-import { runToolLoop } from './runner.js'
 
 export type Tier4Config = {
-  anthropicApiKey: string
-  model?: string
+  llm: LlmProvider
   maxToolLoops?: number
   systemPrompt?: string
   db: SupportDb
@@ -31,9 +29,6 @@ Se não aprovado: chame post_review_comment com motivo específico e pare.
 Nunca faça merge sem aprovação prévia.`
 
 export function createTier4Agent(cfg: Tier4Config) {
-  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
-  const client = new Anthropic({ apiKey: cfg.anthropicApiKey })
-
   async function run(prNumber: number, ticketId: string): Promise<void> {
     const [ticket] = await cfg.db
       .select()
@@ -41,20 +36,19 @@ export function createTier4Agent(cfg: Tier4Config) {
       .where(eq(cfg.schema.supportTickets.id, ticketId))
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
 
-    const initial = [
+    const initial: LlmMessage[] = [
       {
-        role: 'user' as const,
+        role: 'user',
         content: `PR #${prNumber} está pronto para revisão.\nTicket: ${ticketId}\nIssue original: #${ticket.githubIssueId}\n\nRevise e decida: aprovar + merge OU pedir revisão humana.`,
       },
     ]
 
-    await runToolLoop({
-      client,
-      model: cfg.model ?? 'claude-opus-4-7',
+    await cfg.llm.runWithTools({
+      role: 'heavy',
       system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
-      maxToolLoops: cfg.maxToolLoops ?? 6,
-      initialMessages: initial,
+      messages: initial,
       tools: cfg.tools,
+      maxToolLoops: cfg.maxToolLoops ?? 6,
     })
 
     // Status transitions via GitHub webhook (issues.closed after merge)

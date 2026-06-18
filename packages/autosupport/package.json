@@ -49,6 +49,12 @@
     "test:watch": "vitest",
     "lint": "biome check ."
   },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/provider": "^2.0.0",
+    "ai": "^5.0.0"
+  },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.90.0",
     "@sentry/node": ">=10.0.0",
@@ -64,6 +70,7 @@
     "@types/supertest": "^6.0.0",
     "drizzle-orm": "^0.45.0",
     "express": "^5.0.0",
+    "msw": "^2.14.6",
     "pg-boss": "^12.0.0",
     "supertest": "^7.0.0",
     "tsup": "^8.3.0",

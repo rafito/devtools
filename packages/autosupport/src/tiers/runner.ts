@@ -20,6 +20,7 @@ export type ToolLoopResult = {
   messages: Anthropic.MessageParam[]
 }
 
+/** @deprecated use LlmProvider.runWithTools */
 export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult> {
   const messages = [...opts.initialMessages]
   const anthroTools: Anthropic.Tool[] = opts.tools.definitions.map((t) => ({

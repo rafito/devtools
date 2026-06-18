@@ -1,14 +1,12 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
+import type { LlmMessage, LlmProvider } from '../llm/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { AgentResult, SupportDb, ToolBundle, UserContext } from '../types.js'
-import { runToolLoop } from './runner.js'
 
 type StoredMessage = { role: 'user' | 'assistant'; content: string; ts: string }
 
 export type Tier1Config = {
-  anthropicApiKey: string
-  model?: string
+  llm: LlmProvider
   maxToolLoops?: number
   systemPromptBuilder: (ctx: UserContext) => string
   customTools?: ToolBundle
@@ -23,10 +21,7 @@ export type RunTier1Input = {
 }
 
 export function createTier1Agent(cfg: Tier1Config) {
-  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
-  const client = new Anthropic({ apiKey: cfg.anthropicApiKey })
-
-  async function loadHistory(conversationId: string): Promise<Anthropic.MessageParam[]> {
+  async function loadHistory(conversationId: string): Promise<LlmMessage[]> {
     const [conv] = await cfg.db
       .select({ messages: cfg.schema.supportConversations.messages })
       .from(cfg.schema.supportConversations)
@@ -58,20 +53,19 @@ export function createTier1Agent(cfg: Tier1Config) {
     const history = await loadHistory(conversationId)
     await saveMessage(conversationId, 'user', message)
 
-    const initial: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }]
+    const initial: LlmMessage[] = [...history, { role: 'user', content: message }]
 
     let ticketId: string | undefined
-    const result = await runToolLoop({
-      client,
-      model: cfg.model ?? 'claude-haiku-4-5',
-      maxTokens: 2048,
+    const result = await cfg.llm.runWithTools({
+      role: 'fast',
       system: cfg.systemPromptBuilder(userContext),
-      maxToolLoops: cfg.maxToolLoops ?? 5,
-      initialMessages: initial,
+      messages: initial,
       tools: cfg.customTools ?? {
         definitions: [],
         execute: async () => ({ error: 'no tools' }),
       },
+      maxToolLoops: cfg.maxToolLoops ?? 5,
+      maxTokens: 2048,
       onToolResult: (name, _input, r) => {
         const ticket = r as { ticketId?: string }
         if (name === 'create_ticket' && ticket.ticketId) ticketId = ticket.ticketId

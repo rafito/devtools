@@ -1,13 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
+import type { LlmMessage, LlmProvider } from '../llm/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
-import { runToolLoop } from './runner.js'
 
 export type Tier2Config = {
-  anthropicApiKey: string
-  model?: string
+  llm: LlmProvider
   maxToolLoops?: number
   systemPrompt?: string
   db: SupportDb
@@ -38,9 +36,6 @@ O issue deve conter:
 Seja objetivo. Investigue, depois crie o issue.`
 
 export function createTier2Agent(cfg: Tier2Config) {
-  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
-  const client = new Anthropic({ apiKey: cfg.anthropicApiKey })
-
   async function run(ticketId: string): Promise<void> {
     const [ticket] = await cfg.db
       .select()
@@ -52,9 +47,9 @@ export function createTier2Agent(cfg: Tier2Config) {
     const transcript = await loadConversationTranscript(cfg.db, cfg.schema, ticket.conversationId)
 
     let githubIssueId: number | undefined
-    const initial = [
+    const initial: LlmMessage[] = [
       {
-        role: 'user' as const,
+        role: 'user',
         content: [
           `Bug reportado:\n\n${ticket.description}`,
           transcript ? `Conversa com o cliente (chat de suporte):\n\n${transcript}` : null,
@@ -67,13 +62,12 @@ export function createTier2Agent(cfg: Tier2Config) {
       },
     ]
 
-    await runToolLoop({
-      client,
-      model: cfg.model ?? 'claude-opus-4-7',
+    await cfg.llm.runWithTools({
+      role: 'heavy',
       system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
-      maxToolLoops: cfg.maxToolLoops ?? 8,
-      initialMessages: initial,
+      messages: initial,
       tools: cfg.tools,
+      maxToolLoops: cfg.maxToolLoops ?? 8,
       onToolResult: (name, _input, result) => {
         const issue = result as { issueNumber?: number }
         if (name === 'create_github_issue' && issue.issueNumber) {

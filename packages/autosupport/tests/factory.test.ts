@@ -114,4 +114,34 @@ describe('createSupportPipeline', () => {
       })
     ).toThrow()
   })
+
+  it('aceita llm: { provider: openai } sem anthropicApiKey', () => {
+    const p = createSupportPipeline({
+      ...baseConfig,
+      anthropicApiKey: undefined,
+      llm: { provider: 'openai', apiKey: 'k' },
+    })
+    expect(p.tier1).toBeDefined()
+    expect(p.tier2).toBeDefined()
+    expect(p.tier3).toBeDefined()
+    expect(p.tier4).toBeDefined()
+  })
+
+  it('retrocompat: anthropicApiKey sozinho ainda monta pipeline', () => {
+    const p = createSupportPipeline({ ...baseConfig, llm: undefined })
+    expect(p.tier1).toBeDefined()
+    expect(p.tier2).toBeDefined()
+    expect(p.tier3).toBeDefined()
+    expect(p.tier4).toBeDefined()
+  })
+
+  it('lança se nem llm nem anthropicApiKey fornecidos', () => {
+    expect(() =>
+      createSupportPipeline({
+        ...baseConfig,
+        anthropicApiKey: undefined,
+        llm: undefined,
+      })
+    ).toThrow('Configure cfg.llm ou cfg.anthropicApiKey')
+  })
 })
