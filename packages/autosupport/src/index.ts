@@ -73,6 +73,17 @@ export type { GithubWebhookDeps } from './webhooks/github.js'
 export { createSentryWebhookHandler } from './webhooks/sentry.js'
 export type { SentryWebhookDeps } from './webhooks/sentry.js'
 
+// LLM provider port
+export { createLlmProvider } from './llm/index.js'
+export type {
+  LlmProvider,
+  LlmConfig,
+  LlmMessage,
+  LlmRunOptions,
+  LlmRunResult,
+  LlmModelRole,
+} from './llm/index.js'
+
 // Tiers
 export { loadConversationTranscript } from './tiers/conversation.js'
 export { runToolLoop } from './tiers/runner.js'

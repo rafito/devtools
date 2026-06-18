@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { type GitHubClient, createGitHubClient } from './clients/github.js'
 import { type SentryClient, createSentryClient } from './clients/sentry-api.js'
+import { type LlmConfig, createLlmProvider } from './llm/index.js'
 import { type SseBus, createSseBus } from './notifications/sse-bus.js'
 import { type SupportQueue, createSupportQueue } from './queue/index.js'
 import { type SupportSchema, createSupportSchema } from './schema/index.js'
@@ -21,7 +22,9 @@ import { createSentryWebhookHandler } from './webhooks/sentry.js'
 export type SupportPipelineConfig = {
   db: SupportDb
   schema?: SupportSchema
-  anthropicApiKey: string
+  llm?: LlmConfig
+  /** @deprecated use llm: { provider: 'anthropic', apiKey } */
+  anthropicApiKey?: string
 
   github: {
     token: string
@@ -111,7 +114,14 @@ function pickBundle(bundle: ToolBundle, names: string[]): ToolBundle {
 }
 
 export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeline {
-  if (!cfg.anthropicApiKey) throw new Error('anthropicApiKey não configurada')
+  const llmConfig: LlmConfig =
+    cfg.llm ??
+    (cfg.anthropicApiKey
+      ? { provider: 'anthropic', apiKey: cfg.anthropicApiKey }
+      : (() => {
+          throw new Error('Configure cfg.llm ou cfg.anthropicApiKey')
+        })())
+  const llm = createLlmProvider(llmConfig)
 
   const schema = cfg.schema ?? createSupportSchema()
 
@@ -203,8 +213,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
 
   // Agents
   const tier2 = createTier2Agent({
-    anthropicApiKey: cfg.anthropicApiKey,
-    model: cfg.tier2?.model,
+    llm,
     maxToolLoops: cfg.tier2?.maxToolLoops,
     systemPrompt: cfg.tier2?.systemPrompt,
     db: cfg.db,
@@ -213,8 +222,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     enqueueTier3: (id) => queue.enqueueTier3(id),
   })
   const tier3 = createTier3Agent({
-    anthropicApiKey: cfg.anthropicApiKey,
-    model: cfg.tier3?.model,
+    llm,
     maxToolLoops: cfg.tier3?.maxToolLoops,
     systemPrompt: cfg.tier3?.systemPrompt,
     branchPrefix: cfg.tier3?.branchPrefix,
@@ -226,8 +234,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     tools: tier3Tools,
   })
   const tier4 = createTier4Agent({
-    anthropicApiKey: cfg.anthropicApiKey,
-    model: cfg.tier4?.model,
+    llm,
     maxToolLoops: cfg.tier4?.maxToolLoops,
     systemPrompt: cfg.tier4?.systemPrompt,
     db: cfg.db,
@@ -236,8 +243,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   })
 
   const tier1 = createTier1Agent({
-    anthropicApiKey: cfg.anthropicApiKey,
-    model: cfg.tier1.model,
+    llm,
     maxToolLoops: cfg.tier1.maxToolLoops,
     systemPromptBuilder: cfg.tier1.systemPromptBuilder,
     customTools: cfg.tier1.customTools,

@@ -1,5 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai'
-import type { LanguageModelV2 } from 'ai'
+import type { LanguageModelV2 } from '@ai-sdk/provider'
 import type { LlmModelRole } from './types.js'
 
 const DEFAULTS: Record<LlmModelRole, string> = {

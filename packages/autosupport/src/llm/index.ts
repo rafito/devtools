@@ -1,4 +1,4 @@
-import type { LanguageModelV2 } from 'ai'
+import type { LanguageModelV2 } from '@ai-sdk/provider'
 import { createAnthropicModels } from './anthropic.js'
 import { runAgentLoop } from './loop.js'
 import { createOpenAIModels } from './openai.js'

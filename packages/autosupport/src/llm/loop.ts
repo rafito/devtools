@@ -1,4 +1,5 @@
-import { type LanguageModelV2, generateText, jsonSchema, stepCountIs, tool } from 'ai'
+import type { LanguageModelV2 } from '@ai-sdk/provider'
+import { generateText, jsonSchema, stepCountIs, tool } from 'ai'
 import { toErrorMessage } from '../errors.js'
 import type { ToolBundle } from '../types.js'
 import type { LlmMessage, LlmRunResult } from './types.js'
