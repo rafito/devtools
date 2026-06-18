@@ -21,14 +21,22 @@ import { formatCurrency, formatDate, formatCPF, formatCNPJ, formatPhone, formatC
 formatCurrency(1990.5)          // 'R$ 1.990,50'  (BRL by default)
 formatCurrency(1990.5, 'USD')   // '$1,990.50'
 
+// Optional 3rd arg controls the decimal places — e.g. hide cents:
+formatCurrency(189, 'BRL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })   // 'R$ 189'
+formatCurrency(5340, 'BRL', { maximumFractionDigits: 0 })                            // 'R$ 5.340'
+
 formatDate(new Date('2024-03-15'), 'dd/MM/yyyy')  // '15/03/2024'
 formatDate('2024-03-15', 'yyyy-MM-dd')            // '2024-03-15'
 
 formatCPF('12345678909')        // '123.456.789-09'
 formatCNPJ('11222333000181')    // '11.222.333/0001-81'
 formatPhone('11987654321')      // '(11) 98765-4321'
+formatPhone('5511987654321')    // '+55 (11) 98765-4321'  (recognizes the +55 country code)
 formatCEP('01310100')           // '01310-100'
 ```
+
+`formatPhone` keeps local numbers as-is (`(DD) NNNNN-NNNN`) and only adds the
+`+55` prefix for 12/13-digit numbers that start with the Brazilian country code.
 
 ## Validators
 
@@ -72,7 +80,7 @@ deepMerge({ theme: { color: 'blue', size: 12 } }, { theme: { color: 'red' } })
 
 | Function | Signature |
 |----------|-----------|
-| `formatCurrency` | `(value: number, currency?: string) => string` |
+| `formatCurrency` | `(value: number, currency?: string, options?: FormatCurrencyOptions) => string` |
 | `formatDate` | `(date: Date \| string \| number, format?: string) => string` |
 | `formatCPF` / `formatCNPJ` / `formatPhone` / `formatCEP` | `(value: string) => string` |
 | `isValidCPF` / `isValidCNPJ` / `isValidEmail` / `isValidPhone` / `isValidCEP` | `(value: string) => boolean` |

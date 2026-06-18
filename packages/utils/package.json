@@ -1,6 +1,6 @@
 {
   "name": "@devorama/utils",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-dependency TypeScript utilities: Brazilian formatters & validators (CPF, CNPJ, CEP, phone), currency/date formatting, and typed array/object helpers. Works in Node.js and the browser.",
   "type": "module",
   "sideEffects": false,
