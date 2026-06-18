@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LlmProvider, LlmRunOptions } from '../../src/llm/types'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -20,22 +21,22 @@ function makeTools(): ToolBundle {
   return { definitions: [], execute: vi.fn().mockResolvedValue({}) }
 }
 
+function makeLlm(
+  impl?: (opts: LlmRunOptions) => Promise<{ text: string; steps: number; finishReason: string | null }>
+): LlmProvider & { calls: LlmRunOptions[] } {
+  const calls: LlmRunOptions[] = []
+  return {
+    calls,
+    runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+      calls.push(opts)
+      return impl ? await impl(opts) : { text: 'done', steps: 0, finishReason: 'stop' }
+    }),
+  }
+}
+
 const schema = {
   supportTickets: { id: 'col-id', githubIssueId: 'col' },
 } as any
-
-vi.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: 'done' }],
-        }),
-      },
-    })),
-  }
-})
 
 import { createTier2Agent } from '../../src/tiers/tier2'
 
@@ -44,21 +45,9 @@ describe('createTier2Agent', () => {
     vi.clearAllMocks()
   })
 
-  it('apiKey vazia lança', () => {
-    expect(() =>
-      createTier2Agent({
-        anthropicApiKey: '',
-        db: {},
-        schema,
-        tools: makeTools(),
-        enqueueTier3: vi.fn(),
-      })
-    ).toThrow(/anthropicApiKey/)
-  })
-
   it('ticket inexistente lança', async () => {
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db: makeDb(null),
       schema,
       tools: makeTools(),
@@ -71,7 +60,7 @@ describe('createTier2Agent', () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: 99, description: 'xx' })
     const enqueueTier3 = vi.fn()
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -86,7 +75,7 @@ describe('createTier2Agent', () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug xpto' })
     const enqueueTier3 = vi.fn().mockResolvedValue(undefined)
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -102,7 +91,7 @@ describe('createTier2Agent', () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug' })
     const enqueueTier3 = vi.fn()
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       db,
       schema,
       tools: makeTools(),
@@ -113,11 +102,10 @@ describe('createTier2Agent', () => {
     expect(enqueueTier3).not.toHaveBeenCalled()
   })
 
-  it('custom model e maxToolLoops são aceitos sem erros', async () => {
+  it('maxToolLoops customizado é aceito sem erros', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug' })
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
-      model: 'claude-opus-4-5',
+      llm: makeLlm(),
       maxToolLoops: 3,
       db,
       schema,
@@ -130,7 +118,7 @@ describe('createTier2Agent', () => {
   it('custom systemPrompt é aceito', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug' })
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm: makeLlm(),
       systemPrompt: 'custom system',
       db,
       schema,
@@ -141,24 +129,6 @@ describe('createTier2Agent', () => {
   })
 
   it('enqueueTier3 failing silently não propaga erro', async () => {
-    // Simulate issueNumber being returned by onToolResult
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'tool_use',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'x1',
-              name: 'create_github_issue',
-              input: {},
-            },
-          ],
-        }),
-      },
-    }))
-
     const toolsWithIssue: ToolBundle = {
       definitions: [
         {
@@ -173,8 +143,14 @@ describe('createTier2Agent', () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug' })
     const enqueueTier3 = vi.fn().mockRejectedValue(new Error('queue down'))
 
+    const llm = makeLlm(async (opts) => {
+      const r = await opts.tools.execute('create_github_issue', {})
+      opts.onToolResult?.('create_github_issue', {}, r)
+      return { text: 'done', steps: 1, finishReason: 'stop' }
+    })
+
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       tools: toolsWithIssue,
@@ -187,13 +163,6 @@ describe('createTier2Agent', () => {
   })
 
   it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    const createMock = vi.fn().mockResolvedValue({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: 'done' }],
-    })
-    Anthropic.mockImplementation(() => ({ messages: { create: createMock } }))
-
     const ticket = { id: 'tk-1', githubIssueId: null, description: 'bug', conversationId: 'conv-1' }
     const convMessages = [
       { role: 'user', content: 'não consigo logar' },
@@ -216,8 +185,9 @@ describe('createTier2Agent', () => {
       supportConversations: { id: 'c', messages: 'c' },
     } as any
 
+    const llm = makeLlm()
     const agent = createTier2Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema: schemaWithConv,
       tools: makeTools(),
@@ -226,9 +196,8 @@ describe('createTier2Agent', () => {
     })
     await agent.run('tk-1')
 
-    const sentMessages = createMock.mock.calls[0][0].messages
-    expect(sentMessages[0].content).toMatch(/Conversa com o cliente/)
-    expect(sentMessages[0].content).toMatch(/\*\*Cliente:\*\* não consigo logar/)
-    expect(sentMessages[0].content).toMatch(/\*\*Suporte:\*\* tentou resetar a senha/)
+    expect(llm.calls[0].messages[0].content).toMatch(/Conversa com o cliente/)
+    expect(llm.calls[0].messages[0].content).toMatch(/\*\*Cliente:\*\* não consigo logar/)
+    expect(llm.calls[0].messages[0].content).toMatch(/\*\*Suporte:\*\* tentou resetar a senha/)
   })
 })
