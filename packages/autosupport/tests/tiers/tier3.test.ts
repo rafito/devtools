@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -45,7 +45,7 @@ vi.mock('node:child_process', () => ({
   execFile: (cmd: string, args: string[], opts: any, cb: any) => execFileMock(cmd, args, opts, cb),
 }))
 
-import { createTier3Agent, cleanupTier3Failure } from '../../src/tiers/tier3'
+import { cleanupTier3Failure, createTier3Agent } from '../../src/tiers/tier3'
 
 function makeGithubClientMock() {
   return {
@@ -64,7 +64,9 @@ function makeGithubClientMock() {
 describe('createTier3Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => cb(null, { stdout: '', stderr: '' }))
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: '', stderr: '' })
+    )
   })
 
   it('apiKey vazia lança', () => {
@@ -74,7 +76,7 @@ describe('createTier3Agent', () => {
         db: {},
         schema,
         tools: makeTools(),
-      }),
+      })
     ).toThrow(/anthropicApiKey/)
   })
 
@@ -118,7 +120,8 @@ describe('createTier3Agent', () => {
     const Anthropic = (await import('@anthropic-ai/sdk')).default as any
     Anthropic.mockImplementation(() => ({
       messages: {
-        create: vi.fn()
+        create: vi
+          .fn()
           .mockResolvedValueOnce({
             stop_reason: 'tool_use',
             content: [{ type: 'tool_use', id: 'x1', name: 'create_pr', input: {} }],
@@ -155,7 +158,8 @@ describe('createTier3Agent', () => {
     const Anthropic = (await import('@anthropic-ai/sdk')).default as any
     Anthropic.mockImplementation(() => ({
       messages: {
-        create: vi.fn()
+        create: vi
+          .fn()
           .mockResolvedValueOnce({
             stop_reason: 'tool_use',
             content: [{ type: 'tool_use', id: 'x1', name: 'create_pr', input: {} }],
@@ -195,11 +199,17 @@ describe('createTier3Agent', () => {
     // Simula uma branch criada + um write_file feito, sem nunca chamar create_pr.
     Anthropic.mockImplementation(() => ({
       messages: {
-        create: vi.fn()
+        create: vi
+          .fn()
           .mockResolvedValueOnce({
             stop_reason: 'tool_use',
             content: [
-              { type: 'tool_use', id: 'b1', name: 'git_branch', input: { name: 'support/fix-abc' } },
+              {
+                type: 'tool_use',
+                id: 'b1',
+                name: 'git_branch',
+                input: { name: 'support/fix-abc' },
+              },
             ],
           })
           .mockResolvedValueOnce({
@@ -220,7 +230,8 @@ describe('createTier3Agent', () => {
         { name: 'git_branch', description: 'd', input_schema: { type: 'object', properties: {} } },
         { name: 'write_file', description: 'd', input_schema: { type: 'object', properties: {} } },
       ],
-      execute: vi.fn()
+      execute: vi
+        .fn()
         .mockResolvedValueOnce({ success: true })
         .mockResolvedValueOnce({ success: true })
         .mockResolvedValue({}),
@@ -348,5 +359,55 @@ describe('createTier3Agent', () => {
       tools: makeTools(),
     })
     await expect(agent.run('tk-1')).resolves.toBeUndefined()
+  })
+
+  it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
+    const createMock = vi.fn().mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: 'done' }],
+    })
+    Anthropic.mockImplementation(() => ({ messages: { create: createMock } }))
+
+    const ticket = {
+      id: 'tk-1',
+      githubPrId: null,
+      githubIssueId: 10,
+      description: 'bug',
+      conversationId: 'conv-1',
+    }
+    const convMessages = [
+      { role: 'user', content: 'o filtro de data quebra' },
+      { role: 'assistant', content: 'qual intervalo você selecionou?' },
+    ]
+    let n = 0
+    const db = {
+      select: vi.fn().mockImplementation(() => {
+        n++
+        const rows = n === 1 ? [ticket] : [{ messages: convMessages }]
+        return { from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(rows) }) }
+      }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      }),
+    }
+    const schemaWithConv = {
+      supportTickets: { id: 'c', githubPrId: 'c' },
+      supportConversations: { id: 'c', messages: 'c' },
+    } as any
+
+    const agent = createTier3Agent({
+      anthropicApiKey: 'k',
+      db,
+      schema: schemaWithConv,
+      tools: makeTools(),
+      maxToolLoops: 1,
+    })
+    await agent.run('tk-1')
+
+    const sentMessages = createMock.mock.calls[0][0].messages
+    expect(sentMessages[0].content).toMatch(/Conversa com o cliente/)
+    expect(sentMessages[0].content).toMatch(/\*\*Cliente:\*\* o filtro de data quebra/)
+    expect(sentMessages[0].content).toMatch(/\*\*Suporte:\*\* qual intervalo/)
   })
 })

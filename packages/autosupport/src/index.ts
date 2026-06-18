@@ -1,4 +1,4 @@
-export const VERSION = '0.2.0'
+export const VERSION = '0.3.0'
 
 // Headline factory
 export { createSupportPipeline } from './factory.js'
@@ -61,6 +61,7 @@ export { createSentryWebhookHandler } from './webhooks/sentry.js'
 export type { SentryWebhookDeps } from './webhooks/sentry.js'
 
 // Tiers
+export { loadConversationTranscript } from './tiers/conversation.js'
 export { runToolLoop } from './tiers/runner.js'
 export type { ToolLoopOptions, ToolLoopResult } from './tiers/runner.js'
 export { createTier1Agent } from './tiers/tier1.js'

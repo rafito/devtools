@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { eq } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
 import type { ToolBundle } from '../types.js'
+import { loadConversationTranscript } from './conversation.js'
 import { runToolLoop } from './runner.js'
 
 export type Tier2Config = {
@@ -28,6 +29,7 @@ Regras Sentry:
 
 O issue deve conter:
 - Descrição do problema (perspectiva do usuário + técnica)
+- Conversa com o cliente (se fornecida): inclua a seção "Conversa com o cliente" com o transcript, é evidência direta do reporte
 - Arquivos provavelmente envolvidos (com linhas)
 - Dados do Sentry (se disponíveis)
 - Logs correlacionados (se disponíveis)
@@ -47,12 +49,15 @@ export function createTier2Agent(cfg: Tier2Config) {
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
     if (ticket.githubIssueId) return // idempotência
 
+    const transcript = await loadConversationTranscript(cfg.db, cfg.schema, ticket.conversationId)
+
     let githubIssueId: number | undefined
     const initial = [
       {
         role: 'user' as const,
         content: [
           `Bug reportado:\n\n${ticket.description}`,
+          transcript ? `Conversa com o cliente (chat de suporte):\n\n${transcript}` : null,
           ticket.sentryIssueId ? `Sentry Issue ID: ${ticket.sentryIssueId}` : null,
           ticket.tenantId ? `Tenant ID: ${ticket.tenantId}` : null,
           ticket.userId ? `Usuário ID: ${ticket.userId}` : null,

@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import type { GitHubClient } from '../clients/github.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { ToolBundle } from '../types.js'
+import { loadConversationTranscript } from './conversation.js'
 import { runToolLoop } from './runner.js'
 
 const execFileAsync = promisify(execFile)
@@ -39,14 +40,14 @@ Não rode testes localmente. Faça o fix, commit, push, abra o PR — o CI no Gi
 
 Se você não consegue identificar o fix em algumas iterações, pare. A próxima ação será Tier 4 revisando o PR (se CI passar) ou um humano (se você não criar PR ou se Tier 4 bloquear).
 
-O PR deve ter título "[Support] fix: <descrição>" e body com "Closes #{issueNumber}" + diagnóstico do Tier 2 + explicação do fix.
+O PR deve ter título "[Support] fix: <descrição>" e body com "Closes #{issueNumber}" + diagnóstico do Tier 2 + explicação do fix. Se a conversa com o cliente vier no contexto, inclua a seção "## Conversa com o cliente" com o transcript no body do PR — é o reporte original e dá contexto pra quem revisar.
 
 Nunca escreva em arquivos protegidos (a tool write_file rejeita).`
 
 export async function cleanupTier3Failure(
   rootDir: string,
   branchName: string | undefined,
-  defaultBranch: string,
+  defaultBranch: string
 ): Promise<void> {
   const ops: [string, string[]][] = [
     ['git', ['checkout', defaultBranch]],
@@ -75,6 +76,8 @@ export function createTier3Agent(cfg: Tier3Config) {
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
     if (ticket.githubPrId) return // idempotência
 
+    const transcript = await loadConversationTranscript(cfg.db, cfg.schema, ticket.conversationId)
+
     let prNumber: number | undefined
     const writtenFiles: string[] = []
     const branchesCreated: string[] = []
@@ -82,7 +85,17 @@ export function createTier3Agent(cfg: Tier3Config) {
     const initial = [
       {
         role: 'user' as const,
-        content: `Ticket ID: ${ticketId}\nGitHub Issue: #${ticket.githubIssueId}\n\nDescrição:\n${ticket.description}\n\nInvestigue, aplique o fix e crie o PR. Branch sugerida: ${branchPrefix}${ticketId.slice(0, 8)}`,
+        content: [
+          `Ticket ID: ${ticketId}`,
+          `GitHub Issue: #${ticket.githubIssueId}`,
+          ``,
+          `Descrição:`,
+          ticket.description,
+          transcript ? `\nConversa com o cliente (chat de suporte):\n\n${transcript}` : null,
+          `\nInvestigue, aplique o fix e crie o PR. Branch sugerida: ${branchPrefix}${ticketId.slice(0, 8)}`,
+        ]
+          .filter((l) => l !== null)
+          .join('\n'),
       },
     ]
 
@@ -123,9 +136,7 @@ export function createTier3Agent(cfg: Tier3Config) {
         const lines = [
           'Tier 3 não conseguiu criar um PR autonomamente. Requer revisão humana.',
           '',
-          writtenFiles.length
-            ? `**Arquivos modificados:** ${writtenFiles.join(', ')}`
-            : null,
+          writtenFiles.length ? `**Arquivos modificados:** ${writtenFiles.join(', ')}` : null,
           branchesCreated.length
             ? `**Branch tentada:** ${branchesCreated[0]} (deletada após cleanup)`
             : null,

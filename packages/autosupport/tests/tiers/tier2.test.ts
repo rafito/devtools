@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolBundle } from '../../src/types'
 
 function makeDb(ticket: any) {
@@ -52,7 +52,7 @@ describe('createTier2Agent', () => {
         schema,
         tools: makeTools(),
         enqueueTier3: vi.fn(),
-      }),
+      })
     ).toThrow(/anthropicApiKey/)
   })
 
@@ -184,5 +184,51 @@ describe('createTier2Agent', () => {
 
     // Should NOT throw even though enqueueTier3 fails
     await expect(agent.run('tk-1')).resolves.toBeUndefined()
+  })
+
+  it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
+    const createMock = vi.fn().mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: 'done' }],
+    })
+    Anthropic.mockImplementation(() => ({ messages: { create: createMock } }))
+
+    const ticket = { id: 'tk-1', githubIssueId: null, description: 'bug', conversationId: 'conv-1' }
+    const convMessages = [
+      { role: 'user', content: 'não consigo logar' },
+      { role: 'assistant', content: 'tentou resetar a senha?' },
+    ]
+    // 1ª select = ticket; 2ª select = conversa.
+    let n = 0
+    const db = {
+      select: vi.fn().mockImplementation(() => {
+        n++
+        const rows = n === 1 ? [ticket] : [{ messages: convMessages }]
+        return { from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(rows) }) }
+      }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      }),
+    }
+    const schemaWithConv = {
+      supportTickets: { id: 'c', githubIssueId: 'c' },
+      supportConversations: { id: 'c', messages: 'c' },
+    } as any
+
+    const agent = createTier2Agent({
+      anthropicApiKey: 'k',
+      db,
+      schema: schemaWithConv,
+      tools: makeTools(),
+      enqueueTier3: vi.fn(),
+      maxToolLoops: 1,
+    })
+    await agent.run('tk-1')
+
+    const sentMessages = createMock.mock.calls[0][0].messages
+    expect(sentMessages[0].content).toMatch(/Conversa com o cliente/)
+    expect(sentMessages[0].content).toMatch(/\*\*Cliente:\*\* não consigo logar/)
+    expect(sentMessages[0].content).toMatch(/\*\*Suporte:\*\* tentou resetar a senha/)
   })
 })
