@@ -72,8 +72,9 @@ describe('createTier4Agent', () => {
 
   it('maxToolLoops e systemPrompt customizados são aceitos', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: 5 })
+    const llm = makeLlm()
     const agent = createTier4Agent({
-      llm: makeLlm(),
+      llm,
       maxToolLoops: 3,
       systemPrompt: 'custom reviewer',
       db,
@@ -81,6 +82,7 @@ describe('createTier4Agent', () => {
       tools: makeTools(),
     })
     await expect(agent.run(10, 'tk-1')).resolves.toBeUndefined()
+    expect(llm.calls[0].maxToolLoops).toBe(3)
   })
 
   it('passa prNumber e ticketId corretos na mensagem inicial', async () => {

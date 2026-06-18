@@ -1,5 +1,5 @@
 import { MockLanguageModelV2 } from 'ai/test'
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { runAgentLoop } from '../../src/llm/loop'
 import type { ToolBundle } from '../../src/types'
 

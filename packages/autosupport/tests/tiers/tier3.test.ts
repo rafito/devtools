@@ -301,14 +301,16 @@ describe('createTier3Agent', () => {
 
   it('maxToolLoops customizado é aceito sem erros', async () => {
     const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 5, description: 'b' })
+    const llm = makeLlm()
     const agent = createTier3Agent({
-      llm: makeLlm(),
+      llm,
       maxToolLoops: 4,
       db,
       schema,
       tools: makeTools(),
     })
     await expect(agent.run('tk-1')).resolves.toBeUndefined()
+    expect(llm.calls[0].maxToolLoops).toBe(4)
   })
 
   it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {

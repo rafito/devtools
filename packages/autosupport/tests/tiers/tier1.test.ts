@@ -24,26 +24,22 @@ function makeDb(conversation: any) {
   }
 }
 
-function makeTools(): ToolBundle {
-  return { definitions: [], execute: vi.fn().mockResolvedValue({}) }
-}
-
 const schema = {
   supportConversations: { id: 'col-id', messages: 'col-messages' },
 } as any
 
 function makeLlm(
   override?: (opts: LlmRunOptions) => ReturnType<LlmProvider['runWithTools']>
-): LlmProvider {
+): LlmProvider & { calls: LlmRunOptions[] } {
+  const calls: LlmRunOptions[] = []
   return {
-    runWithTools: vi.fn(
-      override ??
-        (async () => ({
-          text: 'Olá! Como posso ajudar?',
-          steps: 0,
-          finishReason: 'stop',
-        }))
-    ),
+    calls,
+    runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+      calls.push(opts)
+      return override
+        ? await override(opts)
+        : { text: 'Olá! Como posso ajudar?', steps: 0, finishReason: 'stop' }
+    }),
   }
 }
 
@@ -170,6 +166,7 @@ describe('createTier1Agent', () => {
     await expect(
       agent.run({ message: 'oi', conversationId: 'conv-5', userContext: userCtx })
     ).resolves.toBeDefined()
+    expect(llm.calls[0].maxToolLoops).toBe(3)
   })
 
   it('sem customTools usa no-op tools (retorna error silenciosamente)', async () => {

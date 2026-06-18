@@ -106,8 +106,9 @@ describe('createTier2Agent', () => {
 
   it('maxToolLoops customizado é aceito sem erros', async () => {
     const db = makeDb({ id: 'tk-1', githubIssueId: null, description: 'bug' })
+    const llm = makeLlm()
     const agent = createTier2Agent({
-      llm: makeLlm(),
+      llm,
       maxToolLoops: 3,
       db,
       schema,
@@ -115,6 +116,7 @@ describe('createTier2Agent', () => {
       enqueueTier3: vi.fn(),
     })
     await expect(agent.run('tk-1')).resolves.toBeUndefined()
+    expect(llm.calls[0].maxToolLoops).toBe(3)
   })
 
   it('custom systemPrompt é aceito', async () => {
