@@ -51,7 +51,11 @@ import { domainTools } from './domain-tools'
 
 const support = createSupportPipeline({
   db,
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
+  llm: {
+    provider: 'openai', // ou 'anthropic'
+    apiKey: process.env.OPENAI_API_KEY!,
+    // models opcional: { fast: '...', heavy: '...' }
+  },
   github: {
     token: process.env.GITHUB_TOKEN!,
     repo: 'org/my-product',
@@ -92,6 +96,8 @@ app.post('/api/webhooks/sentry', express.raw({ type: 'application/json' }), supp
 // Start the background queue
 await support.queue.start()
 ```
+
+> **Note:** `anthropicApiKey` continues to be accepted (retrocompat) and is equivalent to `llm: { provider: 'anthropic', apiKey }`.
 
 ## Database schema
 
