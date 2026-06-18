@@ -1,7 +1,7 @@
 {
   "name": "@devorama/autosupport",
-  "version": "0.3.2",
-  "description": "Autonomous support pipeline for Node.js: chat, investigation, fix, and review tiers powered by Claude, with GitHub and Sentry webhooks. Bring your own Express, Drizzle, and pg-boss.",
+  "version": "0.4.0",
+  "description": "Autonomous support pipeline for Node.js: chat, investigation, fix, and review tiers powered by Anthropic or OpenAI (via the Vercel AI SDK), with GitHub and Sentry webhooks. Bring your own Express, Drizzle, and pg-boss.",
   "type": "module",
   "exports": {
     ".": {
@@ -31,6 +31,8 @@
   "keywords": [
     "claude",
     "anthropic",
+    "openai",
+    "ai-sdk",
     "support",
     "automation",
     "ai-agent",

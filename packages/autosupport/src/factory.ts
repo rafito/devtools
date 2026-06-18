@@ -52,22 +52,22 @@ export type SupportPipelineConfig = {
   }
   protectedPatterns?: RegExp[]
 
-  // Tier-specific overrides
+  // Tier-specific overrides.
+  // Per-role model selection lives in `llm.models` ({ fast, heavy }); per-tier
+  // model overrides are deferred to a later phase, so there is no `model` here.
   tier1: {
-    model?: string
     maxToolLoops?: number
     systemPromptBuilder: (ctx: UserContext) => string
     customTools?: ToolBundle
   }
-  tier2?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
+  tier2?: { maxToolLoops?: number; systemPrompt?: string }
   tier3?: {
-    model?: string
     maxToolLoops?: number
     systemPrompt?: string
     branchPrefix?: string
     defaultBranch?: string
   }
-  tier4?: { model?: string; maxToolLoops?: number; systemPrompt?: string }
+  tier4?: { maxToolLoops?: number; systemPrompt?: string }
 }
 
 export type SupportPipeline = {

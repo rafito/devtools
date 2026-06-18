@@ -1,4 +1,4 @@
-export const VERSION = '0.3.2'
+export const VERSION = '0.4.0'
 
 // Headline factory
 export { createSupportPipeline } from './factory.js'
