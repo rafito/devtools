@@ -17,7 +17,7 @@ vi.mock('pg-boss', () => {
 describe('createSupportPipeline', () => {
   const baseConfig = {
     db: {} as any,
-    anthropicApiKey: 'test-key',
+    llm: { provider: 'anthropic' as const, apiKey: 'test-key' },
     github: {
       token: 'gh-token',
       repo: 'org/repo',
@@ -106,19 +106,9 @@ describe('createSupportPipeline', () => {
     ).toThrow()
   })
 
-  it('lança se anthropicApiKey vazio', () => {
-    expect(() =>
-      createSupportPipeline({
-        ...baseConfig,
-        anthropicApiKey: '',
-      })
-    ).toThrow()
-  })
-
-  it('aceita llm: { provider: openai } sem anthropicApiKey', () => {
+  it('aceita llm: { provider: openai }', () => {
     const p = createSupportPipeline({
       ...baseConfig,
-      anthropicApiKey: undefined,
       llm: { provider: 'openai', apiKey: 'k' },
     })
     expect(p.tier1).toBeDefined()
@@ -127,21 +117,9 @@ describe('createSupportPipeline', () => {
     expect(p.tier4).toBeDefined()
   })
 
-  it('retrocompat: anthropicApiKey sozinho ainda monta pipeline', () => {
-    const p = createSupportPipeline({ ...baseConfig, llm: undefined })
-    expect(p.tier1).toBeDefined()
-    expect(p.tier2).toBeDefined()
-    expect(p.tier3).toBeDefined()
-    expect(p.tier4).toBeDefined()
-  })
-
-  it('lança se nem llm nem anthropicApiKey fornecidos', () => {
-    expect(() =>
-      createSupportPipeline({
-        ...baseConfig,
-        anthropicApiKey: undefined,
-        llm: undefined,
-      })
-    ).toThrow('Configure cfg.llm ou cfg.anthropicApiKey')
+  it('lança se llm não fornecido', () => {
+    expect(() => createSupportPipeline({ ...baseConfig, llm: undefined } as any)).toThrow(
+      'cfg.llm é obrigatório'
+    )
   })
 })

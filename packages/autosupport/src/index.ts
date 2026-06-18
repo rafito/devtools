@@ -1,4 +1,4 @@
-export const VERSION = '0.4.0'
+export const VERSION = '0.5.0'
 
 // Headline factory
 export { createSupportPipeline } from './factory.js'
@@ -86,8 +86,6 @@ export type {
 
 // Tiers
 export { loadConversationTranscript } from './tiers/conversation.js'
-export { runToolLoop } from './tiers/runner.js'
-export type { ToolLoopOptions, ToolLoopResult } from './tiers/runner.js'
 export { createTier1Agent } from './tiers/tier1.js'
 export type { Tier1Config, RunTier1Input } from './tiers/tier1.js'
 export { createTier2Agent } from './tiers/tier2.js'

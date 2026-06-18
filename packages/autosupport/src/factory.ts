@@ -22,9 +22,7 @@ import { createSentryWebhookHandler } from './webhooks/sentry.js'
 export type SupportPipelineConfig = {
   db: SupportDb
   schema?: SupportSchema
-  llm?: LlmConfig
-  /** @deprecated use llm: { provider: 'anthropic', apiKey } */
-  anthropicApiKey?: string
+  llm: LlmConfig
 
   github: {
     token: string
@@ -114,14 +112,8 @@ function pickBundle(bundle: ToolBundle, names: string[]): ToolBundle {
 }
 
 export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeline {
-  const llmConfig: LlmConfig =
-    cfg.llm ??
-    (cfg.anthropicApiKey
-      ? { provider: 'anthropic', apiKey: cfg.anthropicApiKey }
-      : (() => {
-          throw new Error('Configure cfg.llm ou cfg.anthropicApiKey')
-        })())
-  const llm = createLlmProvider(llmConfig)
+  if (!cfg.llm) throw new Error('cfg.llm é obrigatório')
+  const llm = createLlmProvider(cfg.llm)
 
   const schema = cfg.schema ?? createSupportSchema()
 

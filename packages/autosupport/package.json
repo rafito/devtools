@@ -1,6 +1,6 @@
 {
   "name": "@devorama/autosupport",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Autonomous support pipeline for Node.js: chat, investigation, fix, and review tiers powered by Anthropic or OpenAI (via the Vercel AI SDK), with GitHub and Sentry webhooks. Bring your own Express, Drizzle, and pg-boss.",
   "type": "module",
   "exports": {
@@ -58,14 +58,12 @@
     "ai": "^5.0.0"
   },
   "peerDependencies": {
-    "@anthropic-ai/sdk": ">=0.90.0",
     "@sentry/node": ">=10.0.0",
     "drizzle-orm": ">=0.45.0",
     "express": ">=5.0.0",
     "pg-boss": ">=12.0.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.96.0",
     "@sentry/node": "^10.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
