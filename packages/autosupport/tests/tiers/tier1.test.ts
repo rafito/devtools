@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LlmProvider, LlmRunOptions } from '../../src/llm/types'
 import type { ToolBundle, UserContext } from '../../src/types'
 
 const userCtx: UserContext = {
@@ -31,18 +32,20 @@ const schema = {
   supportConversations: { id: 'col-id', messages: 'col-messages' },
 } as any
 
-vi.mock('@anthropic-ai/sdk', () => {
+function makeLlm(
+  override?: (opts: LlmRunOptions) => ReturnType<LlmProvider['runWithTools']>
+): LlmProvider {
   return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: 'Olá! Como posso ajudar?' }],
-        }),
-      },
-    })),
+    runWithTools: vi.fn(
+      override ??
+        (async () => ({
+          text: 'Olá! Como posso ajudar?',
+          steps: 0,
+          finishReason: 'stop',
+        }))
+    ),
   }
-})
+}
 
 import { createTier1Agent } from '../../src/tiers/tier1'
 
@@ -51,21 +54,11 @@ describe('createTier1Agent', () => {
     vi.clearAllMocks()
   })
 
-  it('apiKey vazia lança', () => {
-    expect(() =>
-      createTier1Agent({
-        anthropicApiKey: '',
-        db: {},
-        schema,
-        systemPromptBuilder: () => 'sys',
-      })
-    ).toThrow(/anthropicApiKey/)
-  })
-
   it('happy path: retorna text e conversationId', async () => {
     const db = makeDb({ messages: [] })
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: (ctx) => `Ajudando ${ctx.fullName}`,
@@ -82,8 +75,9 @@ describe('createTier1Agent', () => {
 
   it('salva mensagem user e assistant na conversa', async () => {
     const db = makeDb({ messages: [] })
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: () => 'sys',
@@ -95,8 +89,9 @@ describe('createTier1Agent', () => {
 
   it('histórico vazio (conversa nova) não lança', async () => {
     const db = makeDb(null) // no existing conversation
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: () => 'sys',
@@ -107,19 +102,10 @@ describe('createTier1Agent', () => {
   })
 
   it('retorna fallback quando text está vazio', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          stop_reason: 'max_tokens',
-          content: [],
-        }),
-      },
-    }))
-
     const db = makeDb({ messages: [] })
+    const llm = makeLlm(async () => ({ text: '', steps: 0, finishReason: 'max_tokens' }))
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: () => 'sys',
@@ -133,24 +119,6 @@ describe('createTier1Agent', () => {
   })
 
   it('captura ticketId de create_ticket tool call', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default as any
-    Anthropic.mockImplementation(() => ({
-      messages: {
-        create: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stop_reason: 'tool_use',
-            content: [
-              { type: 'tool_use', id: 'c1', name: 'create_ticket', input: { description: 'bug' } },
-            ],
-          })
-          .mockResolvedValue({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: 'Ticket criado.' }],
-          }),
-      },
-    }))
-
     const tools: ToolBundle = {
       definitions: [
         {
@@ -163,8 +131,17 @@ describe('createTier1Agent', () => {
     }
 
     const db = makeDb({ messages: [] })
+    const llm: LlmProvider = {
+      runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+        // simulate the tool loop calling execute and reporting via onToolResult
+        const r = await opts.tools.execute('create_ticket', { description: 'bug' })
+        opts.onToolResult?.('create_ticket', { description: 'bug' }, r)
+        return { text: 'Ticket criado.', steps: 1, finishReason: 'stop' }
+      }),
+    }
+
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       customTools: tools,
@@ -180,11 +157,11 @@ describe('createTier1Agent', () => {
     expect(result.text).toBe('Ticket criado.')
   })
 
-  it('custom model e maxToolLoops são aceitos', async () => {
+  it('maxToolLoops é aceito', async () => {
     const db = makeDb({ messages: [] })
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
-      model: 'claude-haiku-4-5',
+      llm,
       maxToolLoops: 3,
       db,
       schema,
@@ -197,8 +174,9 @@ describe('createTier1Agent', () => {
 
   it('sem customTools usa no-op tools (retorna error silenciosamente)', async () => {
     const db = makeDb({ messages: [] })
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: () => 'sys',
@@ -212,8 +190,9 @@ describe('createTier1Agent', () => {
   it('systemPromptBuilder recebe userContext correto', async () => {
     const builder = vi.fn().mockReturnValue('prompt built')
     const db = makeDb({ messages: [] })
+    const llm = makeLlm()
     const agent = createTier1Agent({
-      anthropicApiKey: 'k',
+      llm,
       db,
       schema,
       systemPromptBuilder: builder,
