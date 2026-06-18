@@ -97,7 +97,7 @@ app.post('/api/webhooks/sentry', express.raw({ type: 'application/json' }), supp
 await support.queue.start()
 ```
 
-> **Note:** `anthropicApiKey` continues to be accepted (retrocompat) and is equivalent to `llm: { provider: 'anthropic', apiKey }`.
+> **Note:** `anthropicApiKey` continues to be accepted (retrocompat) and is equivalent to `llm: { provider: 'anthropic', apiKey }`. Per-role model selection is configured via `llm.models` (`fast` for Tier 1, `heavy` for Tiers 2–4); there is no per-tier `model` option.
 
 ## Database schema
 
