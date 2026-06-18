@@ -1,7 +1,9 @@
 {
   "name": "@devorama/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "Lightweight, SSR-safe React hooks: useDebounce, usePrevious, useLocalStorage, useBreakpoint, and useClickOutside. Zero runtime dependencies, fully typed.",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,7 +14,31 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafito/devtools.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/rafito/devtools/issues"
+  },
+  "homepage": "https://github.com/rafito/devtools/tree/main/packages/react#readme",
+  "author": "Rafael D'Arrigo (https://github.com/rafito)",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "hooks",
+    "react-hooks",
+    "usedebounce",
+    "uselocalstorage",
+    "usebreakpoint",
+    "ssr",
+    "typescript"
+  ],
   "publishConfig": {
     "access": "public"
   },

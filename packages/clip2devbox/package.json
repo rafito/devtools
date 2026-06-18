@@ -1,10 +1,10 @@
 {
   "name": "@devorama/clip2devbox",
-  "version": "0.3.3",
-  "description": "Envia arquivo ou print do clipboard (Windows) pra uma devbox via Tailscale/scp e troca o clipboard pelo caminho remoto com prefixo @, pronto pra colar no Claude Code/ttyd.",
+  "version": "0.3.4",
+  "description": "Send a clipboard file or screenshot from Windows to a remote devbox over Tailscale + scp, then swap the clipboard for the remote path (prefixed with @) — ready to paste into Claude Code / ttyd.",
   "type": "module",
   "bin": {
-    "clip2devbox": "./dist/cli.mjs"
+    "clip2devbox": "dist/cli.mjs"
   },
   "exports": {
     ".": {
@@ -21,8 +21,11 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "assets", "README.md"],
+  "files": ["dist", "assets", "README.md", "LICENSE"],
   "os": ["win32"],
+  "engines": {
+    "node": ">=18"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rafito/devtools.git",
@@ -32,6 +35,7 @@
     "url": "https://github.com/rafito/devtools/issues"
   },
   "homepage": "https://github.com/rafito/devtools/tree/main/packages/clip2devbox#readme",
+  "author": "Rafael D'Arrigo (https://github.com/rafito)",
   "keywords": [
     "clipboard",
     "screenshot",

@@ -1,38 +1,52 @@
 # @devorama/autosupport
 
-Pipeline de suporte autônomo extraído do FaceFutura: chat (Tier 1) → investigação (Tier 2) → fix (Tier 3) → review (Tier 4), com webhooks GitHub e Sentry.
+[![npm version](https://img.shields.io/npm/v/@devorama/autosupport.svg)](https://www.npmjs.com/package/@devorama/autosupport)
+[![npm downloads](https://img.shields.io/npm/dm/@devorama/autosupport.svg)](https://www.npmjs.com/package/@devorama/autosupport)
+[![license](https://img.shields.io/npm/l/@devorama/autosupport.svg)](https://github.com/rafito/devtools/blob/main/LICENSE)
 
-## Instalação
+An **autonomous support pipeline** for Node.js apps, powered by Claude. It escalates a ticket through four tiers — **chat → investigate → fix → review** — and wires straight into GitHub and Sentry webhooks. You bring Express, Drizzle, and pg-boss; this package brings the agents.
+
+## How it works
+
+| Tier | Role | Model |
+|------|------|-------|
+| **Tier 1** | Support chat with your custom domain tools | Claude Haiku |
+| **Tier 2** | Investigates code + logs + Sentry, opens a GitHub issue | Claude Opus |
+| **Tier 3** | Writes the fix, runs tests, opens a PR | Claude Opus |
+| **Tier 4** | Reviews the diff, approves & merges | Claude Opus |
+
+Full design spec: [autonomous-support-design.md](https://github.com/rafito/devtools/blob/main/docs/superpowers/specs/2026-05-20-autonomous-support-design.md).
+
+## Install
 
 ```bash
-pnpm add @devorama/autosupport
-# peer deps
-pnpm add @anthropic-ai/sdk @sentry/node drizzle-orm express pg-boss
+npm install @devorama/autosupport
+# peer dependencies (bring your own versions):
+npm install @anthropic-ai/sdk @sentry/node drizzle-orm express pg-boss
 ```
 
-## Sentry Init Order
+## ⚠️ Sentry init order
 
-Para que a auto-instrumentação do Sentry no Express funcione, `initSentry` PRECISA ser chamado ANTES de qualquer import que use Express. Coloque isso no TOPO do entry point:
+For Sentry's Express auto-instrumentation to work, `initSentry` **must run before any import that uses Express**. Put it at the very top of your entry point:
 
 ```ts
-// server/index.ts (ou onde for seu entry)
+// server/index.ts — the very first lines
 import { initSentry } from '@devorama/autosupport'
 initSentry({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV })
 
-// SÓ DEPOIS de initSentry, importe o resto:
+// only AFTER initSentry, import everything else:
 import express from 'express'
 import { support } from './lib/autosupport'
-// ...
 ```
 
-`createSupportPipeline` não chama mais `initSentry` internamente (era impossível garantir ordem correta com Express). O `dsn` foi removido do bloco `sentry` da config — passe direto pro `initSentry`.
+`createSupportPipeline` no longer calls `initSentry` internally (correct ordering with Express couldn't be guaranteed), and `dsn` was removed from the `sentry` config block — pass it directly to `initSentry`.
 
-## Uso básico
+## Usage
 
 ```ts
 import { createSupportPipeline } from '@devorama/autosupport'
 import { db } from './db'
-import { meuPromptDoTier1 } from './support-prompt'
+import { buildTier1Prompt } from './support-prompt'
 import { domainTools } from './domain-tools'
 
 const support = createSupportPipeline({
@@ -52,16 +66,16 @@ const support = createSupportPipeline({
   queue: { connectionString: process.env.DATABASE_URL! },
   rootDir: process.cwd(),
   tier1: {
-    systemPromptBuilder: meuPromptDoTier1,
+    systemPromptBuilder: buildTier1Prompt,
     customTools: domainTools,
   },
-  // testCommand é OPT-IN. Por padrão Tier 3 não roda testes localmente — o CI
-  // valida no PR (mais seguro: evita executar testes contra o DB de produção).
-  // Habilite apenas em ambientes de dev/sandbox:
+  // testCommand is OPT-IN. By default Tier 3 does NOT run tests locally — CI
+  // validates the PR instead (safer: avoids running tests against a prod DB).
+  // Enable it only in dev/sandbox environments:
   // testCommand: { command: 'pnpm', args: ['test'] },
 })
 
-// API REST
+// REST endpoint for Tier 1 chat
 app.post('/api/support/chat', async (req, res) => {
   const result = await support.tier1.run({
     message: req.body.message,
@@ -71,36 +85,31 @@ app.post('/api/support/chat', async (req, res) => {
   res.json(result)
 })
 
-// Webhooks
+// Webhooks (Tiers 2–4 are driven by these)
 app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), support.webhooks.github)
 app.post('/api/webhooks/sentry', express.raw({ type: 'application/json' }), support.webhooks.sentry)
 
-// Iniciar fila
+// Start the background queue
 await support.queue.start()
 ```
 
-## Schema
+## Database schema
 
-O pacote provê tabelas Drizzle reutilizáveis. Aplique no seu DB:
+The package ships reusable Drizzle tables. Apply them to your database:
 
 ```ts
 import { createSupportSchema } from '@devorama/autosupport'
 
-export const { supportTickets, supportConversations,
-  supportTicketStatusEnum, supportTicketSourceEnum } = createSupportSchema()
+export const {
+  supportTickets,
+  supportConversations,
+  supportTicketStatusEnum,
+  supportTicketSourceEnum,
+} = createSupportSchema()
 ```
 
-Foreign keys para `tenants` / `users` ficam por conta do consumer (varia por projeto).
-
-## Architecture
-
-- **Tier 1** — chat de suporte (Claude Haiku) com tools customizadas de domínio
-- **Tier 2** — investiga código + logs + Sentry, cria GitHub issue (Claude Opus)
-- **Tier 3** — escreve fix, roda testes, abre PR (Claude Opus)
-- **Tier 4** — revisa diff, faz approve + merge (Claude Opus)
-
-Spec completa: ver [docs/superpowers/specs/2026-05-20-autonomous-support-design.md](../../docs/superpowers/specs/2026-05-20-autonomous-support-design.md) no monorepo `devtools`.
+Foreign keys to your own `tenants` / `users` tables are left to the consumer (they vary per project).
 
 ## License
 
-MIT
+[MIT](./LICENSE) © Rafael D'Arrigo

@@ -1,6 +1,7 @@
 {
   "name": "@devorama/autosupport",
-  "version": "0.3.0",
+  "version": "0.3.1",
+  "description": "Autonomous support pipeline for Node.js: chat, investigation, fix, and review tiers powered by Claude, with GitHub and Sentry webhooks. Bring your own Express, Drizzle, and pg-boss.",
   "type": "module",
   "exports": {
     ".": {
@@ -12,8 +13,36 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
-  "publishConfig": { "access": "public" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafito/devtools.git",
+    "directory": "packages/autosupport"
+  },
+  "bugs": {
+    "url": "https://github.com/rafito/devtools/issues"
+  },
+  "homepage": "https://github.com/rafito/devtools/tree/main/packages/autosupport#readme",
+  "author": "Rafael D'Arrigo (https://github.com/rafito)",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "anthropic",
+    "support",
+    "automation",
+    "ai-agent",
+    "github",
+    "sentry",
+    "express",
+    "drizzle",
+    "pg-boss"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

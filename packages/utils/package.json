@@ -1,7 +1,9 @@
 {
   "name": "@devorama/utils",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "Zero-dependency TypeScript utilities: Brazilian formatters & validators (CPF, CNPJ, CEP, phone), currency/date formatting, and typed array/object helpers. Works in Node.js and the browser.",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,7 +14,33 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafito/devtools.git",
+    "directory": "packages/utils"
+  },
+  "bugs": {
+    "url": "https://github.com/rafito/devtools/issues"
+  },
+  "homepage": "https://github.com/rafito/devtools/tree/main/packages/utils#readme",
+  "author": "Rafael D'Arrigo (https://github.com/rafito)",
+  "license": "MIT",
+  "keywords": [
+    "typescript",
+    "utilities",
+    "formatters",
+    "validators",
+    "cpf",
+    "cnpj",
+    "cep",
+    "currency",
+    "brazil",
+    "zero-dependencies"
+  ],
   "publishConfig": {
     "access": "public"
   },

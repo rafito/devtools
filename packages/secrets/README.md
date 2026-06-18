@@ -1,21 +1,24 @@
 # @devorama/secrets
 
-CLI para gerenciar secrets em AWS Parameter Store via [chamber](https://github.com/segmentio/chamber). Push/pull de arquivos `.env` para/de `<service>/<envName>`.
+[![npm version](https://img.shields.io/npm/v/@devorama/secrets.svg)](https://www.npmjs.com/package/@devorama/secrets)
+[![npm downloads](https://img.shields.io/npm/dm/@devorama/secrets.svg)](https://www.npmjs.com/package/@devorama/secrets)
+[![license](https://img.shields.io/npm/l/@devorama/secrets.svg)](https://github.com/rafito/devtools/blob/main/LICENSE)
 
-## Instalação
+A tiny CLI to sync `.env` files with **AWS Parameter Store** via [`chamber`](https://github.com/segmentio/chamber). Push a local `.env` up to `<service>/<env>`, or pull it back down — perfect for sharing secrets across a team or wiring them into CI.
+
+## Install
 
 ```bash
-pnpm add -D @devorama/secrets
-# ou global:
-pnpm add -g @devorama/secrets
+npm install -D @devorama/secrets
+# or install globally: npm install -g @devorama/secrets
 ```
 
-Pré-requisitos:
+### Requirements
 
-- [`chamber`](https://github.com/segmentio/chamber#installation) no PATH
-- Credenciais AWS (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, `AWS_PROFILE`, ou `~/.aws/credentials`)
+- [`chamber`](https://github.com/segmentio/chamber#installation) available on your `PATH`
+- AWS credentials (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, `AWS_PROFILE`, or `~/.aws/credentials`)
 
-## Uso
+## Usage
 
 ### Push `.env` → Parameter Store
 
@@ -26,14 +29,14 @@ devtools secrets push \
   --env-name production
 ```
 
-Opções:
-
-- `--env <file>` — arquivo `.env` (default `.env`)
-- `--service <name>` — nome do chamber service (obrigatório)
-- `--env-name <name>` — environment (ex.: `staging`, `production`) (obrigatório)
-- `--kms-alias <alias>` — KMS key alias para encryption (ver [KMS](#kms-key-alias))
-- `--dry-run` — só lista o que seria escrito
-- `--verbose` — log de cada chave
+| Flag | Description |
+|------|-------------|
+| `--env <file>` | Source `.env` file (default `.env`) |
+| `--service <name>` | **Required.** Chamber service name |
+| `--env-name <name>` | **Required.** Environment (e.g. `staging`, `production`) |
+| `--kms-alias <alias>` | KMS key alias used for encryption — see [KMS key alias](#kms-key-alias) |
+| `--dry-run` | Print what would be written without touching AWS |
+| `--verbose` | Log every key |
 
 ### Pull Parameter Store → `.env`
 
@@ -44,41 +47,41 @@ devtools secrets pull \
   --output .env.production
 ```
 
-Opções:
+| Flag | Description |
+|------|-------------|
+| `--service <name>` | **Required.** Chamber service name |
+| `--env-name <name>` | **Required.** Environment |
+| `--output <file>` | Output path (default `.env`) |
+| `--force` | Overwrite an existing file |
+| `--dry-run` | List keys only (never values) |
+| `--verbose` | Log details |
 
-- `--service <name>` — nome do chamber service (obrigatório)
-- `--env-name <name>` — environment (obrigatório)
-- `--output <file>` — caminho de saída (default `.env`)
-- `--force` — sobrescreve arquivo existente
-- `--dry-run` — só lista as keys (não os valores)
-- `--verbose` — log de detalhes
+`pull` uses `chamber export --format dotenv`, so the generated file is plain `KEY=value` (no `export ` prefix) — compatible with `docker compose --env-file`, `direnv`, GitHub Actions, and standard `.env` parsers.
 
-O `pull` usa `chamber export --format dotenv`, então o arquivo gerado fica no formato `KEY=value` (sem prefixo `export `), compatível com `docker-compose --env-file`, `direnv`, GitHub Actions e parsers `.env` padrão.
+## KMS key alias
 
-## KMS Key Alias
-
-Por padrão `chamber write` encripta com `alias/parameter_store_key` (customer-managed KMS key), que **não existe automaticamente em todas as regions AWS**. Em `sa-east-1`, por exemplo, o push falha com:
+By default `chamber write` encrypts with `alias/parameter_store_key` (a customer-managed KMS key), which **does not exist automatically in every AWS region**. In `sa-east-1`, for example, a push fails with:
 
 ```
 InvalidKeyId: Alias arn:aws:kms:sa-east-1:<acct>:alias/parameter_store_key is not found.
 ```
 
-Soluções:
+Pick one of:
 
-1. **Flag CLI** (recomendado para um push pontual):
+1. **CLI flag** (best for a one-off push):
 
    ```bash
    devtools secrets push --kms-alias alias/aws/ssm --service my-app --env-name production
    ```
 
-2. **Env var** (recomendado para scripts/CI):
+2. **Env var** (best for scripts/CI):
 
    ```bash
    CHAMBER_KMS_KEY_ALIAS=alias/aws/ssm devtools secrets push ...
    ```
 
-3. **Criar a chave customer-managed** na region — ver [docs do chamber](https://github.com/segmentio/chamber#quick-start) (`chamber` aceita customer-managed keys e oferece melhor controle de IAM/audit que `alias/aws/ssm`).
+3. **Create the customer-managed key** in the region — see the [chamber docs](https://github.com/segmentio/chamber#quick-start). A customer-managed key gives you finer IAM/audit control than `alias/aws/ssm`.
 
 ## License
 
-MIT
+[MIT](./LICENSE) © Rafael D'Arrigo
