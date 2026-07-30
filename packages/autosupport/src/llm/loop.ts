@@ -1,5 +1,5 @@
-import type { LanguageModelV2 } from '@ai-sdk/provider'
-import { generateText, jsonSchema, stepCountIs, tool } from 'ai'
+import type { LanguageModelV4 } from '@ai-sdk/provider'
+import { dynamicTool, generateText, jsonSchema, stepCountIs } from 'ai'
 import { toErrorMessage } from '../errors.js'
 import type { ToolBundle } from '../types.js'
 import type { LlmMessage, LlmRunResult } from './types.js'
@@ -14,23 +14,24 @@ export type AgentLoopOptions = {
 }
 
 export async function runAgentLoop(
-  model: LanguageModelV2,
+  model: LanguageModelV4,
   opts: AgentLoopOptions
 ): Promise<LlmRunResult> {
   const aiTools = Object.fromEntries(
     opts.tools.definitions.map((d) => [
       d.name,
-      tool({
+      dynamicTool({
         description: d.description,
-        inputSchema: jsonSchema(d.input_schema),
-        execute: async (input: Record<string, unknown>) => {
+        inputSchema: jsonSchema<Record<string, unknown>>(d.input_schema),
+        execute: async (input: unknown) => {
+          const toolInput = input as Record<string, unknown>
           let result: unknown
           try {
-            result = await opts.tools.execute(d.name, input)
+            result = await opts.tools.execute(d.name, toolInput)
           } catch (err) {
             result = { error: `Tool execution failed: ${toErrorMessage(err)}` }
           }
-          opts.onToolResult?.(d.name, input, result)
+          opts.onToolResult?.(d.name, toolInput, result)
           return result
         },
       }),

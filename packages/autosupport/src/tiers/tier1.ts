@@ -1,5 +1,6 @@
-import { eq } from 'drizzle-orm'
 import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import { resolveSupportRepositories } from '../persistence/drizzle.js'
+import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { AgentResult, SupportDb, ToolBundle, UserContext } from '../types.js'
 
@@ -10,8 +11,9 @@ export type Tier1Config = {
   maxToolLoops?: number
   systemPromptBuilder: (ctx: UserContext) => string
   customTools?: ToolBundle
-  db: SupportDb
-  schema: SupportSchema
+  repositories?: SupportRepositories
+  db?: SupportDb
+  schema?: SupportSchema
 }
 
 export type RunTier1Input = {
@@ -21,13 +23,12 @@ export type RunTier1Input = {
 }
 
 export function createTier1Agent(cfg: Tier1Config) {
+  const repositories = resolveSupportRepositories(cfg)
+
   async function loadHistory(conversationId: string): Promise<LlmMessage[]> {
-    const [conv] = await cfg.db
-      .select({ messages: cfg.schema.supportConversations.messages })
-      .from(cfg.schema.supportConversations)
-      .where(eq(cfg.schema.supportConversations.id, conversationId))
-    if (!conv) return []
-    const stored = conv.messages as StoredMessage[]
+    const stored = (await repositories.conversations.findMessages(
+      conversationId
+    )) as StoredMessage[]
     return stored.map((m) => ({ role: m.role, content: m.content }))
   }
 
@@ -36,16 +37,11 @@ export function createTier1Agent(cfg: Tier1Config) {
     role: 'user' | 'assistant',
     content: string
   ): Promise<void> {
-    const [conv] = await cfg.db
-      .select({ messages: cfg.schema.supportConversations.messages })
-      .from(cfg.schema.supportConversations)
-      .where(eq(cfg.schema.supportConversations.id, conversationId))
-    const existing = (conv?.messages ?? []) as StoredMessage[]
-    const updated = [...existing, { role, content, ts: new Date().toISOString() }]
-    await cfg.db
-      .update(cfg.schema.supportConversations)
-      .set({ messages: updated, updatedAt: new Date() })
-      .where(eq(cfg.schema.supportConversations.id, conversationId))
+    await repositories.conversations.appendMessage(conversationId, {
+      role,
+      content,
+      ts: new Date().toISOString(),
+    })
   }
 
   async function run(input: RunTier1Input): Promise<AgentResult> {

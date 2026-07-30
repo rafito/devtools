@@ -1,5 +1,6 @@
-import { eq } from 'drizzle-orm'
 import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import { resolveSupportRepositories } from '../persistence/drizzle.js'
+import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 
@@ -7,8 +8,9 @@ export type Tier4Config = {
   llm: LlmProvider
   maxToolLoops?: number
   systemPrompt?: string
-  db: SupportDb
-  schema: SupportSchema
+  repositories?: SupportRepositories
+  db?: SupportDb
+  schema?: SupportSchema
   tools: ToolBundle
 }
 
@@ -29,11 +31,10 @@ Se não aprovado: chame post_review_comment com motivo específico e pare.
 Nunca faça merge sem aprovação prévia.`
 
 export function createTier4Agent(cfg: Tier4Config) {
+  const repositories = resolveSupportRepositories(cfg)
+
   async function run(prNumber: number, ticketId: string): Promise<void> {
-    const [ticket] = await cfg.db
-      .select()
-      .from(cfg.schema.supportTickets)
-      .where(eq(cfg.schema.supportTickets.id, ticketId))
+    const ticket = await repositories.tickets.findById(ticketId)
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
 
     const initial: LlmMessage[] = [

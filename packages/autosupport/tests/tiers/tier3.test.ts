@@ -294,6 +294,21 @@ describe('createTier3Agent', () => {
     expect(llm.calls[0].maxToolLoops).toBe(4)
   })
 
+  it('orienta executar o comando de testes quando runTests está habilitado', async () => {
+    const db = makeDb({ id: 'tk-1', githubPrId: null, githubIssueId: 5, description: 'b' })
+    const llm = makeLlm()
+    const agent = createTier3Agent({
+      llm,
+      runTests: true,
+      db,
+      schema,
+      tools: makeTools(),
+    })
+    await agent.run('tk-1')
+    expect(llm.calls[0].system).toContain('run_tests')
+    expect(llm.calls[0].system).not.toContain('Não rode testes localmente')
+  })
+
   it('injeta a conversa do chat no contexto quando ticket tem conversationId', async () => {
     const ticket = {
       id: 'tk-1',

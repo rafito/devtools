@@ -27,6 +27,54 @@ export type SupportTicketRow = {
   updatedAt: Date
 }
 
+export type SupportMessage = {
+  role: 'user' | 'assistant' | string
+  content: string
+  ts: string
+}
+
+export type SupportConversationRow = {
+  id: string
+  tenantId: string
+  userId: string
+  messages: SupportMessage[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type CreateTicketInput = {
+  id?: string
+  tenantId?: string | null
+  userId?: string | null
+  conversationId?: string | null
+  description: string
+  status?: TicketStatus
+  source: TicketSource
+  sentryIssueId?: string | null
+  githubIssueId?: number | null
+  githubPrId?: number | null
+  resolvedAt?: Date | null
+  notifiedAt?: Date | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export type UpdateTicketInput = Partial<
+  Omit<SupportTicketRow, 'id' | 'createdAt' | 'description' | 'source'>
+> & {
+  description?: string
+  source?: TicketSource
+}
+
+export type CreateConversationInput = {
+  id?: string
+  tenantId: string
+  userId: string
+  messages?: SupportMessage[]
+  createdAt?: Date
+  updatedAt?: Date
+}
+
 export type ToolDefinition = {
   name: string
   description: string

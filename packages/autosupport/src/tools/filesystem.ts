@@ -70,8 +70,10 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
   async function execute(name: string, input: Record<string, unknown>): Promise<unknown> {
     switch (name) {
       case 'read_file': {
+        const filePath = input.path as string
+        if (isProtected(filePath)) return { error: `Arquivo protegido: ${filePath}` }
         try {
-          const resolved = safeResolvePath(input.path as string)
+          const resolved = safeResolvePath(filePath)
           const content = await fs.readFile(resolved, 'utf8')
           return { content: content.slice(0, 8000) }
         } catch (err) {
@@ -82,14 +84,28 @@ export function createFilesystemTools(cfg: FilesystemToolsConfig): ToolBundle {
       case 'search_code': {
         try {
           const dir = safeResolvePath((input.directory as string) ?? '.')
-          const { stdout } = await execFileAsync('grep', [
-            '-r',
-            '--include=*.ts',
-            '-n',
-            '--max-count=20',
-            input.query as string,
-            dir,
-          ])
+          const { stdout } = await execFileAsync(
+            'grep',
+            [
+              '-r',
+              '-n',
+              '--binary-files=without-match',
+              '--exclude-dir=.git',
+              '--exclude-dir=node_modules',
+              '--exclude-dir=.venv',
+              '--exclude-dir=venv',
+              '--exclude-dir=dist',
+              '--exclude=.env',
+              '--exclude=.env.*',
+              '--exclude=*.pem',
+              '--exclude=*.key',
+              '--max-count=20',
+              '--',
+              input.query as string,
+              dir,
+            ],
+            { maxBuffer: 1024 * 1024 }
+          )
           return { matches: stdout.slice(0, 4000) }
         } catch (err) {
           // grep exits 1 when there are no matches — not an error here.

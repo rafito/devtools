@@ -1,4 +1,4 @@
-import { MockLanguageModelV2 } from 'ai/test'
+import { MockLanguageModelV4 } from 'ai/test'
 import { expect, it, vi } from 'vitest'
 import { runAgentLoop } from '../../src/llm/loop'
 import type { ToolBundle } from '../../src/types'
@@ -12,11 +12,16 @@ function tools(execute = vi.fn().mockResolvedValue({ ok: true })): ToolBundle {
   }
 }
 
+const usage = {
+  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+  outputTokens: { total: 1, text: 1, reasoning: undefined },
+}
+
 it('end_turn imediato — retorna texto, 0 tool steps', async () => {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV4({
     doGenerate: async () => ({
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      finishReason: { unified: 'stop', raw: undefined },
+      usage,
       content: [{ type: 'text', text: 'hello' }],
       warnings: [],
     }),
@@ -34,20 +39,20 @@ it('end_turn imediato — retorna texto, 0 tool steps', async () => {
 it('onToolResult dispara no execute de cada tool', async () => {
   // Primeira geração chama a tool; segunda encerra com texto.
   let call = 0
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV4({
     doGenerate: async () => {
       call++
       if (call === 1) {
         return {
-          finishReason: 'tool-calls',
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          finishReason: { unified: 'tool-calls', raw: undefined },
+          usage,
           content: [{ type: 'tool-call', toolCallId: 't1', toolName: 'test_tool', input: '{}' }],
           warnings: [],
         }
       }
       return {
-        finishReason: 'stop',
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        finishReason: { unified: 'stop', raw: undefined },
+        usage,
         content: [{ type: 'text', text: 'done' }],
         warnings: [],
       }
@@ -67,19 +72,19 @@ it('onToolResult dispara no execute de cada tool', async () => {
 
 it('tool execute lançando vira { error }', async () => {
   let call = 0
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV4({
     doGenerate: async () => {
       call++
       return call === 1
         ? {
-            finishReason: 'tool-calls',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            finishReason: { unified: 'tool-calls', raw: undefined },
+            usage,
             content: [{ type: 'tool-call', toolCallId: 't1', toolName: 'test_tool', input: '{}' }],
             warnings: [],
           }
         : {
-            finishReason: 'stop',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            finishReason: { unified: 'stop', raw: undefined },
+            usage,
             content: [{ type: 'text', text: 'ok' }],
             warnings: [],
           }

@@ -1,4 +1,4 @@
-export const VERSION = '0.5.0'
+export { VERSION } from './version.js'
 
 // Headline factory
 export { createSupportPipeline } from './factory.js'
@@ -14,6 +14,11 @@ export type {
   TicketStatus,
   TicketSource,
   SupportTicketRow,
+  SupportMessage,
+  SupportConversationRow,
+  CreateTicketInput,
+  UpdateTicketInput,
+  CreateConversationInput,
   ToolDefinition,
   ToolExecutor,
   ToolBundle,
@@ -21,6 +26,19 @@ export type {
   AgentResult,
   NotificationEvent,
 } from './types.js'
+
+// Persistence ports and built-in Drizzle adapter
+export { createDrizzleRepositories, resolveSupportRepositories } from './persistence/drizzle.js'
+export type {
+  DrizzlePersistenceConfig,
+  SupportPersistenceConfig,
+} from './persistence/drizzle.js'
+export type {
+  TicketRepository,
+  ConversationRepository,
+  SupportRepositories,
+  RepositoryPersistenceConfig,
+} from './persistence/types.js'
 
 // Clients
 export { createGitHubClient } from './clients/github.js'
@@ -41,8 +59,6 @@ export type {
   SentryIssueResult,
   SentrySearchResult,
 } from './clients/sentry-api.js'
-export { initSentry, Sentry, setupExpressErrorHandler } from './clients/sentry-sdk.js'
-export type { InitSentryOptions } from './clients/sentry-sdk.js'
 
 // Notifications
 export { createSseBus } from './notifications/sse-bus.js'
@@ -69,9 +85,18 @@ export { createSentryTool } from './tools/sentry-tools.js'
 
 // Webhooks
 export { createGithubWebhookHandler } from './webhooks/github.js'
+export { createGithubWebhookProcessor } from './webhooks/github.js'
 export type { GithubWebhookDeps } from './webhooks/github.js'
 export { createSentryWebhookHandler } from './webhooks/sentry.js'
+export { createSentryWebhookProcessor } from './webhooks/sentry.js'
 export type { SentryWebhookDeps } from './webhooks/sentry.js'
+export type {
+  WebhookHeaders,
+  WebhookProcessorRequest,
+  WebhookResult,
+  WebhookAdapterRequest,
+  WebhookAdapterResponse,
+} from './webhooks/types.js'
 
 // LLM provider port
 export { createLlmProvider } from './llm/index.js'
@@ -94,3 +119,18 @@ export { createTier3Agent } from './tiers/tier3.js'
 export type { Tier3Config } from './tiers/tier3.js'
 export { createTier4Agent } from './tiers/tier4.js'
 export type { Tier4Config } from './tiers/tier4.js'
+
+// Standalone cross-stack HTTP service
+export {
+  startAutosupportService,
+  loadServiceConfig,
+  createAutosupportHttpServer,
+  bootstrapServiceSchema,
+  createServiceDatabase,
+} from './service/index.js'
+export type {
+  AutosupportService,
+  AutosupportServiceConfig,
+  ServiceTestCommand,
+  AutosupportHttpServerDeps,
+} from './service/index.js'

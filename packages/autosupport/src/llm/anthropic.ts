@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
-import type { LanguageModelV2 } from '@ai-sdk/provider'
+import type { LanguageModelV4 } from '@ai-sdk/provider'
 import type { LlmModelRole } from './types.js'
 
 const DEFAULTS: Record<LlmModelRole, string> = {
@@ -10,7 +10,7 @@ const DEFAULTS: Record<LlmModelRole, string> = {
 export function createAnthropicModels(
   apiKey: string,
   models?: Partial<Record<LlmModelRole, string>>
-): Record<LlmModelRole, LanguageModelV2> {
+): Record<LlmModelRole, LanguageModelV4> {
   const anthropic = createAnthropic({ apiKey })
   return {
     fast: anthropic(models?.fast ?? DEFAULTS.fast),

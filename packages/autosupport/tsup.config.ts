@@ -1,7 +1,12 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    'service/index': 'src/service/index.ts',
+    cli: 'src/cli.ts',
+    'sentry-node': 'src/clients/sentry-sdk.ts',
+  },
   format: ['cjs', 'esm'],
   dts: true,
   clean: true,

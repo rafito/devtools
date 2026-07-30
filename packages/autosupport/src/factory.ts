@@ -1,8 +1,9 @@
-import type { Request, Response } from 'express'
 import { type GitHubClient, createGitHubClient } from './clients/github.js'
 import { type SentryClient, createSentryClient } from './clients/sentry-api.js'
 import { type LlmConfig, createLlmProvider } from './llm/index.js'
 import { type SseBus, createSseBus } from './notifications/sse-bus.js'
+import { resolveSupportRepositories } from './persistence/drizzle.js'
+import type { SupportRepositories } from './persistence/types.js'
 import { type SupportQueue, createSupportQueue } from './queue/index.js'
 import { type SupportSchema, createSupportSchema } from './schema/index.js'
 import { createTier1Agent } from './tiers/tier1.js'
@@ -18,10 +19,12 @@ import { createTestsTool } from './tools/tests.js'
 import type { SupportDb, ToolBundle, UserContext } from './types.js'
 import { createGithubWebhookHandler } from './webhooks/github.js'
 import { createSentryWebhookHandler } from './webhooks/sentry.js'
+import type { WebhookAdapterRequest, WebhookAdapterResponse } from './webhooks/types.js'
 
 export type SupportPipelineConfig = {
-  db: SupportDb
+  db?: SupportDb
   schema?: SupportSchema
+  repositories?: SupportRepositories
   llm: LlmConfig
 
   github: {
@@ -70,6 +73,7 @@ export type SupportPipelineConfig = {
 
 export type SupportPipeline = {
   schema: SupportSchema
+  repositories: SupportRepositories
   tier1: ReturnType<typeof createTier1Agent>
   tier2: ReturnType<typeof createTier2Agent>
   tier3: ReturnType<typeof createTier3Agent>
@@ -116,6 +120,11 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   const llm = createLlmProvider(cfg.llm)
 
   const schema = cfg.schema ?? createSupportSchema()
+  const repositories = resolveSupportRepositories({
+    repositories: cfg.repositories,
+    db: cfg.db,
+    schema,
+  })
 
   // Nota: initSentry NÃO é chamado aqui. O consumer deve chamar initSentry({ dsn })
   // antes de qualquer import que use Express, no topo do entry point. Ver README.
@@ -208,8 +217,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     llm,
     maxToolLoops: cfg.tier2?.maxToolLoops,
     systemPrompt: cfg.tier2?.systemPrompt,
-    db: cfg.db,
-    schema,
+    repositories,
     tools: tier2Tools,
     enqueueTier3: (id) => queue.enqueueTier3(id),
   })
@@ -218,19 +226,18 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     maxToolLoops: cfg.tier3?.maxToolLoops,
     systemPrompt: cfg.tier3?.systemPrompt,
     branchPrefix: cfg.tier3?.branchPrefix,
+    runTests: Boolean(cfg.testCommand),
     defaultBranch: cfg.tier3?.defaultBranch,
     rootDir: cfg.rootDir,
     githubClient,
-    db: cfg.db,
-    schema,
+    repositories,
     tools: tier3Tools,
   })
   const tier4 = createTier4Agent({
     llm,
     maxToolLoops: cfg.tier4?.maxToolLoops,
     systemPrompt: cfg.tier4?.systemPrompt,
-    db: cfg.db,
-    schema,
+    repositories,
     tools: tier4Tools,
   })
 
@@ -239,8 +246,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     maxToolLoops: cfg.tier1.maxToolLoops,
     systemPromptBuilder: cfg.tier1.systemPromptBuilder,
     customTools: cfg.tier1.customTools,
-    db: cfg.db,
-    schema,
+    repositories,
   })
 
   // Queue wired after agents (needs agent runners)
@@ -257,8 +263,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   const sentryWebhookConfigured = Boolean(cfg.sentry.webhookSecret && cfg.sentry.projectSlug)
   const webhooks = {
     github: createGithubWebhookHandler({
-      db: cfg.db,
-      schema,
+      repositories,
       queue,
       sseBus,
       githubClient,
@@ -267,13 +272,12 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     }),
     sentry: sentryWebhookConfigured
       ? createSentryWebhookHandler({
-          db: cfg.db,
-          schema,
+          repositories,
           queue,
           webhookSecret: cfg.sentry.webhookSecret,
           projectSlug: cfg.sentry.projectSlug,
         })
-      : ((async (_req: Request, res: Response) =>
+      : ((async (_req: WebhookAdapterRequest, res: WebhookAdapterResponse) =>
           res.status(503).json({
             error: 'Sentry webhook não configurado (webhookSecret ausente)',
           })) as ReturnType<typeof createSentryWebhookHandler>),
@@ -281,6 +285,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
 
   return {
     schema,
+    repositories,
     tier1,
     tier2,
     tier3,

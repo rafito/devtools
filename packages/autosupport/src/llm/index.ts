@@ -1,4 +1,4 @@
-import type { LanguageModelV2 } from '@ai-sdk/provider'
+import type { LanguageModelV4 } from '@ai-sdk/provider'
 import { createAnthropicModels } from './anthropic.js'
 import { runAgentLoop } from './loop.js'
 import { createOpenAIModels } from './openai.js'
@@ -11,7 +11,7 @@ export type LlmConfig = {
 }
 
 export function createLlmProvider(cfg: LlmConfig): LlmProvider {
-  let models: Record<LlmModelRole, LanguageModelV2>
+  let models: Record<LlmModelRole, LanguageModelV4>
   if (cfg.provider === 'anthropic') models = createAnthropicModels(cfg.apiKey, cfg.models)
   else if (cfg.provider === 'openai') models = createOpenAIModels(cfg.apiKey, cfg.models)
   else throw new Error(`LLM provider desconhecido: ${(cfg as { provider: string }).provider}`)

@@ -63,6 +63,32 @@ describe('createSupportPipeline', () => {
     expect(p.schema).toBe(customSchema)
   })
 
+  it('aceita repositories sem db para integrações não-Drizzle', () => {
+    const repositories = {
+      tickets: {
+        findById: vi.fn(),
+        findByGithubIssueId: vi.fn(),
+        findByGithubPrId: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      conversations: {
+        findById: vi.fn(),
+        findMessages: vi.fn(),
+        create: vi.fn(),
+        appendMessage: vi.fn(),
+      },
+    } as any
+
+    const p = createSupportPipeline({
+      ...baseConfig,
+      db: undefined,
+      repositories,
+    })
+
+    expect(p.repositories).toBe(repositories)
+  })
+
   it('aceita customTools no tier1', () => {
     const customTools = {
       definitions: [

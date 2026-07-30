@@ -11,6 +11,7 @@ beforeAll(async () => {
   await fs.writeFile(path.join(tmpRoot, 'hello.ts'), 'export const x = 1\n')
   await fs.mkdir(path.join(tmpRoot, 'server'), { recursive: true })
   await fs.writeFile(path.join(tmpRoot, 'server', 'foo.ts'), 'function findMe() {}\n')
+  await fs.writeFile(path.join(tmpRoot, 'server', 'api.py'), 'def find_python_bug():\n    pass\n')
 })
 afterAll(async () => fs.rm(tmpRoot, { recursive: true, force: true }))
 
@@ -38,12 +39,30 @@ describe('createFilesystemTools', () => {
     expect(r.matches).toContain('findMe')
   })
 
+  it('search_code busca linguagens diferentes de TypeScript', async () => {
+    const t = createFilesystemTools({ rootDir: tmpRoot })
+    const r = (await t.execute('search_code', {
+      query: 'find_python_bug',
+      directory: 'server',
+    })) as any
+    expect(r.matches).toContain('api.py')
+  })
+
   it('write_file rejeita arquivo protegido', async () => {
     const t = createFilesystemTools({
       rootDir: tmpRoot,
       protectedPatterns: [/^\.env/],
     })
     const r = (await t.execute('write_file', { path: '.env', content: 'x' })) as any
+    expect(r.error).toContain('protegido')
+  })
+
+  it('read_file rejeita arquivo protegido', async () => {
+    const t = createFilesystemTools({
+      rootDir: tmpRoot,
+      protectedPatterns: [/^\.env/],
+    })
+    const r = (await t.execute('read_file', { path: '.env' })) as any
     expect(r.error).toContain('protegido')
   })
 

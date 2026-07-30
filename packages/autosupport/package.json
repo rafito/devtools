@@ -1,21 +1,34 @@
 {
   "name": "@devorama/autosupport",
-  "version": "0.5.0",
-  "description": "Autonomous support pipeline for Node.js: chat, investigation, fix, and review tiers powered by Anthropic or OpenAI (via the Vercel AI SDK), with GitHub and Sentry webhooks. Bring your own Express, Drizzle, and pg-boss.",
+  "version": "0.6.0",
+  "description": "Cross-stack autonomous support pipeline: embed in Node.js or run the HTTP service alongside FastAPI, Django, Rails, Laravel, Spring, and other backends.",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./service": {
+      "types": "./dist/service/index.d.ts",
+      "import": "./dist/service/index.mjs",
+      "require": "./dist/service/index.cjs"
+    },
+    "./sentry-node": {
+      "types": "./dist/sentry-node.d.ts",
+      "import": "./dist/sentry-node.mjs",
+      "require": "./dist/sentry-node.cjs"
     }
+  },
+  "bin": {
+    "autosupport": "./dist/cli.mjs"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE"],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "repository": {
     "type": "git",
@@ -40,7 +53,10 @@
     "sentry",
     "express",
     "drizzle",
-    "pg-boss"
+    "pg-boss",
+    "fastapi",
+    "python",
+    "cross-stack"
   ],
   "publishConfig": {
     "access": "public"
@@ -52,26 +68,29 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.0",
-    "@ai-sdk/openai": "^2.0.0",
-    "@ai-sdk/provider": "^2.0.0",
-    "ai": "^5.0.0"
+    "@ai-sdk/anthropic": "^4.0.24",
+    "@ai-sdk/openai": "^4.0.24",
+    "@ai-sdk/provider": "^4.0.4",
+    "ai": "^7.0.42",
+    "drizzle-orm": "^0.45.0",
+    "pg-boss": "^12.0.0",
+    "postgres": "^3.4.9"
   },
   "peerDependencies": {
-    "@sentry/node": ">=10.0.0",
-    "drizzle-orm": ">=0.45.0",
-    "express": ">=5.0.0",
-    "pg-boss": ">=12.0.0"
+    "@sentry/node": ">=10.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@sentry/node": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@sentry/node": "^10.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/supertest": "^6.0.0",
-    "drizzle-orm": "^0.45.0",
     "express": "^5.0.0",
     "msw": "^2.14.6",
-    "pg-boss": "^12.0.0",
     "supertest": "^7.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",

@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0: minor versions may carry breaking changes.
 
+## [0.6.0] - 2026-07-30
+
+### Added
+
+- Standalone, authenticated HTTP service for FastAPI, Django, Rails, Laravel,
+  Spring, Go, and other backends.
+- `autosupport serve` npm executable and `@devorama/autosupport/service`
+  subpath export.
+- Automatic PostgreSQL schema bootstrap for standalone deployments.
+- `POST /v1/tickets`, `GET /v1/tickets/:id`, `/health`, and raw GitHub/Sentry
+  webhook routes.
+- ORM-neutral `TicketRepository`, `ConversationRepository`, and
+  `SupportRepositories` contracts with a built-in Drizzle adapter.
+- Framework-neutral GitHub and Sentry webhook processors.
+- Configurable cross-stack local test commands, including `pytest`.
+- AI SDK 7 provider runtime with patched HTTP dependencies.
+
+### Changed
+
+- Drizzle, pg-boss, Sentry Node, and PostgreSQL runtime packages are regular
+  dependencies; consumers no longer install peers manually.
+- Source search covers Python and other languages instead of only `.ts` files.
+- Tier 3 is instructed to run `run_tests` when `testCommand` is configured and
+  continues to rely on CI when it is omitted.
+- The existing direct Node/Express API remains supported.
+- The minimum Node.js version is now 22, matching AI SDK 7.
+- Sentry Node auto-instrumentation moved from the root export to the optional
+  `@devorama/autosupport/sentry-node` entrypoint. Install `@sentry/node` only
+  for embedded Node instrumentation; the standalone service does not need it.
+
 ## [0.5.0] - 2026-06-18
 
 ### Removed

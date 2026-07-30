@@ -14,7 +14,7 @@ A monorepo of small, focused, **published** packages from the Devorama toolbox �
 | [`@devorama/react`](./packages/react) | [![npm](https://img.shields.io/npm/v/@devorama/react.svg)](https://www.npmjs.com/package/@devorama/react) | SSR-safe, fully typed React hooks |
 | [`@devorama/secrets`](./packages/secrets) | [![npm](https://img.shields.io/npm/v/@devorama/secrets.svg)](https://www.npmjs.com/package/@devorama/secrets) | CLI to push/pull `.env` files to AWS Parameter Store via `chamber` |
 | [`@devorama/clip2devbox`](./packages/clip2devbox) | [![npm](https://img.shields.io/npm/v/@devorama/clip2devbox.svg)](https://www.npmjs.com/package/@devorama/clip2devbox) | Windows CLI: send a clipboard file/screenshot to a remote devbox over Tailscale |
-| [`@devorama/autosupport`](./packages/autosupport) | [![npm](https://img.shields.io/npm/v/@devorama/autosupport.svg)](https://www.npmjs.com/package/@devorama/autosupport) | Autonomous support pipeline (chat → investigate → fix → review) powered by Claude |
+| [`@devorama/autosupport`](./packages/autosupport) | [![npm](https://img.shields.io/npm/v/@devorama/autosupport.svg)](https://www.npmjs.com/package/@devorama/autosupport) | Cross-stack autonomous support pipeline: embed in Node or run beside FastAPI, Django, Rails, Laravel, Spring, Go, and other backends |
 
 Each package has its own README with full usage docs — click the package name above.
 
@@ -26,13 +26,14 @@ npm install @devorama/react          # React hooks
 npm install -D @devorama/secrets     # secrets CLI (usually a devDependency)
 npm install -g @devorama/clip2devbox # Windows clipboard CLI (global)
 npm install @devorama/autosupport    # autonomous support pipeline
+npx @devorama/autosupport serve      # standalone service for non-Node backends
 ```
 
 ## Development
 
 ### Requirements
 
-- Node.js 18+
+- Node.js 22+
 - pnpm 9+
 
 ### Setup

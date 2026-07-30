@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm'
+import { resolveSupportRepositories } from '../persistence/drizzle.js'
+import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb } from '../types.js'
 
@@ -20,18 +21,38 @@ const ROLE_LABELS: Record<string, string> = {
  * Retorna null quando não há o que anexar — sem conversationId, conversa
  * inexistente, ou sem mensagens — pra que o chamador simplesmente omita a seção.
  */
-export async function loadConversationTranscript(
+export function loadConversationTranscript(
+  repositories: SupportRepositories,
+  conversationId: string | null | undefined
+): Promise<string | null>
+export function loadConversationTranscript(
   db: SupportDb,
   schema: SupportSchema,
   conversationId: string | null | undefined
+): Promise<string | null>
+export async function loadConversationTranscript(
+  repositoriesOrDb: SupportRepositories | SupportDb,
+  schemaOrConversationId: SupportSchema | string | null | undefined,
+  legacyConversationId?: string | null
 ): Promise<string | null> {
+  const repositoryMode =
+    typeof repositoriesOrDb === 'object' &&
+    repositoriesOrDb !== null &&
+    'conversations' in repositoriesOrDb
+  const repositories = repositoryMode
+    ? (repositoriesOrDb as SupportRepositories)
+    : resolveSupportRepositories({
+        db: repositoriesOrDb,
+        schema: schemaOrConversationId as SupportSchema,
+      })
+  const conversationId = repositoryMode
+    ? (schemaOrConversationId as string | null | undefined)
+    : legacyConversationId
+
   if (!conversationId) return null
-  const [conv] = await db
-    .select({ messages: schema.supportConversations.messages })
-    .from(schema.supportConversations)
-    .where(eq(schema.supportConversations.id, conversationId))
-  if (!conv) return null
-  const messages = (conv.messages ?? []) as StoredMessage[]
+  const messages = (await repositories.conversations.findMessages(
+    conversationId
+  )) as StoredMessage[]
   if (!messages.length) return null
   return messages.map((m) => `**${ROLE_LABELS[m.role] ?? m.role}:** ${m.content}`).join('\n')
 }

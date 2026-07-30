@@ -1,5 +1,6 @@
-import { eq } from 'drizzle-orm'
 import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import { resolveSupportRepositories } from '../persistence/drizzle.js'
+import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
@@ -8,8 +9,9 @@ export type Tier2Config = {
   llm: LlmProvider
   maxToolLoops?: number
   systemPrompt?: string
-  db: SupportDb
-  schema: SupportSchema
+  repositories?: SupportRepositories
+  db?: SupportDb
+  schema?: SupportSchema
   tools: ToolBundle
   enqueueTier3: (ticketId: string) => Promise<unknown>
 }
@@ -36,15 +38,14 @@ O issue deve conter:
 Seja objetivo. Investigue, depois crie o issue.`
 
 export function createTier2Agent(cfg: Tier2Config) {
+  const repositories = resolveSupportRepositories(cfg)
+
   async function run(ticketId: string): Promise<void> {
-    const [ticket] = await cfg.db
-      .select()
-      .from(cfg.schema.supportTickets)
-      .where(eq(cfg.schema.supportTickets.id, ticketId))
+    const ticket = await repositories.tickets.findById(ticketId)
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
     if (ticket.githubIssueId) return // idempotência
 
-    const transcript = await loadConversationTranscript(cfg.db, cfg.schema, ticket.conversationId)
+    const transcript = await loadConversationTranscript(repositories, ticket.conversationId)
 
     let githubIssueId: number | undefined
     const initial: LlmMessage[] = [
@@ -76,10 +77,11 @@ export function createTier2Agent(cfg: Tier2Config) {
       },
     })
 
-    await cfg.db
-      .update(cfg.schema.supportTickets)
-      .set({ status: 'investigating', githubIssueId: githubIssueId ?? null, updatedAt: new Date() })
-      .where(eq(cfg.schema.supportTickets.id, ticketId))
+    await repositories.tickets.update(ticketId, {
+      status: 'investigating',
+      githubIssueId: githubIssueId ?? null,
+      updatedAt: new Date(),
+    })
 
     if (githubIssueId) {
       try {

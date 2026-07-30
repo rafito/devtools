@@ -1,5 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai'
-import type { LanguageModelV2 } from '@ai-sdk/provider'
+import type { LanguageModelV4 } from '@ai-sdk/provider'
 import type { LlmModelRole } from './types.js'
 
 const DEFAULTS: Record<LlmModelRole, string> = {
@@ -10,7 +10,7 @@ const DEFAULTS: Record<LlmModelRole, string> = {
 export function createOpenAIModels(
   apiKey: string,
   models?: Partial<Record<LlmModelRole, string>>
-): Record<LlmModelRole, LanguageModelV2> {
+): Record<LlmModelRole, LanguageModelV4> {
   const openai = createOpenAI({ apiKey })
   return {
     fast: openai(models?.fast ?? DEFAULTS.fast),

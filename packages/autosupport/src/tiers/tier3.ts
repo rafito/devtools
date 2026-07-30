@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { eq } from 'drizzle-orm'
 import type { GitHubClient } from '../clients/github.js'
 import { toErrorMessage } from '../errors.js'
 import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import { resolveSupportRepositories } from '../persistence/drizzle.js'
+import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
@@ -15,8 +16,10 @@ export type Tier3Config = {
   maxToolLoops?: number
   systemPrompt?: string
   branchPrefix?: string
-  db: SupportDb
-  schema: SupportSchema
+  runTests?: boolean
+  repositories?: SupportRepositories
+  db?: SupportDb
+  schema?: SupportSchema
   tools: ToolBundle
   /** Cliente GitHub usado para postar comentário na issue quando Tier 3 falha. */
   githubClient?: GitHubClient
@@ -26,16 +29,25 @@ export type Tier3Config = {
   rootDir?: string
 }
 
-const DEFAULT_SYSTEM = (branchPrefix: string) =>
+const DEFAULT_SYSTEM = (branchPrefix: string, runTests: boolean) =>
   `Você é um agente autônomo de correção de bugs. Receberá o diagnóstico de um bug (ticket + issue GitHub) e deve:
 
 1. Explorar o código com read_file / search_code
 2. Criar branch com git_branch (nome: "${branchPrefix}{ticketId[:8]}")
 3. Escrever o fix com write_file (Tier 3 pode escrever também testes novos)
-4. git_commit_push (não rode testes localmente — CI valida no PR)
-5. create_pr com label "support-auto"
+4. ${
+    runTests
+      ? 'Executar run_tests e corrigir eventuais falhas antes de continuar'
+      : 'git_commit_push (não rode testes localmente — CI valida no PR)'
+  }
+5. ${runTests ? 'git_commit_push somente depois dos testes passarem' : 'create_pr com label "support-auto"'}
+6. ${runTests ? 'create_pr com label "support-auto"' : 'Aguardar a validação do CI'}
 
-Não rode testes localmente. Faça o fix, commit, push, abra o PR — o CI no GitHub valida. Tier 4 só vai aprovar quando o CI passar.
+${
+  runTests
+    ? 'Use run_tests após escrever o fix. Faça o fix, valide, commit, push e abra o PR.'
+    : 'Não rode testes localmente. Faça o fix, commit, push, abra o PR — o CI no GitHub valida.'
+} Tier 4 só vai aprovar quando o CI passar.
 
 Se você não consegue identificar o fix em algumas iterações, pare. A próxima ação será Tier 4 revisando o PR (se CI passar) ou um humano (se você não criar PR ou se Tier 4 bloquear).
 
@@ -66,16 +78,14 @@ export async function cleanupTier3Failure(
 
 export function createTier3Agent(cfg: Tier3Config) {
   const branchPrefix = cfg.branchPrefix ?? 'support/fix-'
+  const repositories = resolveSupportRepositories(cfg)
 
   async function run(ticketId: string): Promise<void> {
-    const [ticket] = await cfg.db
-      .select()
-      .from(cfg.schema.supportTickets)
-      .where(eq(cfg.schema.supportTickets.id, ticketId))
+    const ticket = await repositories.tickets.findById(ticketId)
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
     if (ticket.githubPrId) return // idempotência
 
-    const transcript = await loadConversationTranscript(cfg.db, cfg.schema, ticket.conversationId)
+    const transcript = await loadConversationTranscript(repositories, ticket.conversationId)
 
     let prNumber: number | undefined
     const writtenFiles: string[] = []
@@ -100,7 +110,7 @@ export function createTier3Agent(cfg: Tier3Config) {
 
     await cfg.llm.runWithTools({
       role: 'heavy',
-      system: cfg.systemPrompt ?? DEFAULT_SYSTEM(branchPrefix),
+      system: cfg.systemPrompt ?? DEFAULT_SYSTEM(branchPrefix, cfg.runTests ?? false),
       messages: initial,
       tools: cfg.tools,
       maxToolLoops: cfg.maxToolLoops ?? 12,
@@ -120,10 +130,11 @@ export function createTier3Agent(cfg: Tier3Config) {
     })
 
     if (prNumber) {
-      await cfg.db
-        .update(cfg.schema.supportTickets)
-        .set({ status: 'fixing', githubPrId: prNumber, updatedAt: new Date() })
-        .where(eq(cfg.schema.supportTickets.id, ticketId))
+      await repositories.tickets.update(ticketId, {
+        status: 'fixing',
+        githubPrId: prNumber,
+        updatedAt: new Date(),
+      })
       return
     }
 
@@ -153,10 +164,10 @@ export function createTier3Agent(cfg: Tier3Config) {
     }
 
     // 3) Atualiza status do ticket.
-    await cfg.db
-      .update(cfg.schema.supportTickets)
-      .set({ status: 'investigating', updatedAt: new Date() })
-      .where(eq(cfg.schema.supportTickets.id, ticketId))
+    await repositories.tickets.update(ticketId, {
+      status: 'investigating',
+      updatedAt: new Date(),
+    })
   }
 
   return { run }
