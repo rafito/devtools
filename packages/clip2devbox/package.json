@@ -1,6 +1,6 @@
 {
   "name": "@devorama/clip2devbox",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Send a clipboard file or screenshot from Windows to a remote devbox over Tailscale + scp, then swap the clipboard for the remote path (prefixed with @) — ready to paste into Claude Code / ttyd.",
   "type": "module",
   "bin": {

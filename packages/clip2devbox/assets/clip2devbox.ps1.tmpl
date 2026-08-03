@@ -118,7 +118,7 @@ function Unique-Name($name, $used) {
     }
 }
 
-function File-Size($path) { return (Get-Item $path).Length }
+function File-Size($path) { return (Get-Item -LiteralPath $path).Length }
 function Too-Big($path)   { if ($MaxBytes -le 0) { return $false }; return ((File-Size $path) -gt $MaxBytes) }
 function Wants-Progress($path) { return (($ProgressMin -gt 0) -and ((File-Size $path) -gt $ProgressMin)) }
 
@@ -189,12 +189,14 @@ try {
         $prog = Wants-Progress $tmp
         if ($prog) { Show-Progress "Enviando $name..." }
         $remotes += Upload-File $tmp $name $prog
-        Remove-Item $tmp -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
     }
     # --- caso 2: arquivo(s) copiado(s) no Explorer (qualquer tipo) ---
     elseif ([System.Windows.Forms.Clipboard]::ContainsFileDropList()) {
+        # -LiteralPath obrigatorio: sem ele, nome com [ ] (ex. "RE [EXTERNO] ...eml")
+        # vira wildcard, nao casa nada e o arquivo some do lote silenciosamente.
         $files = @([System.Windows.Forms.Clipboard]::GetFileDropList()) |
-                 Where-Object { (Test-Path $_) -and -not (Test-Path $_ -PathType Container) }
+                 Where-Object { (Test-Path -LiteralPath $_) -and -not (Test-Path -LiteralPath $_ -PathType Container) }
         if ($files.Count -eq 0) { Beep-Fail; Toast 'Nada pra enviar (so pastas ou caminhos invalidos?).'; exit 1 }
         Ensure-RemoteDir
         $used = @{}
@@ -242,16 +244,16 @@ try {
         }
 
         $final = Join-Path $env:TEMP $name
-        Move-Item $tmp $final -Force
+        Move-Item -LiteralPath $tmp -Destination $final -Force
         if (Too-Big $final) {
-            Remove-Item $final -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $final -ErrorAction SilentlyContinue
             Beep-Fail; Toast 'Arquivo baixado esta acima do limite.'; exit 1
         }
         Ensure-RemoteDir
         $prog = Wants-Progress $final
         if ($prog) { Show-Progress "Enviando $name..." }
         $remotes += Upload-File $final $name $prog
-        Remove-Item $final -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $final -ErrorAction SilentlyContinue
     }
     else {
         Beep-Fail

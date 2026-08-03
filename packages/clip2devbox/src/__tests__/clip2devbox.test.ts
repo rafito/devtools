@@ -1,8 +1,14 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { packageVersion } from '../paths'
 import { buildCronLine, renderTemplate } from '../render'
 import { hasSshHost, renderHostBlock, upsertSshHost } from '../ssh-config'
 import { parseDevboxHost } from '../tailscale'
+
+const powershellTemplate = readFileSync(
+  new URL('../../assets/clip2devbox.ps1.tmpl', import.meta.url),
+  'utf8'
+)
 
 describe('renderTemplate', () => {
   it('substitui tokens', () => {
@@ -27,6 +33,13 @@ describe('renderTemplate', () => {
       }
     )
     expect(out).toBe("h='devbox' d='/home/rafito/clips' m=104857600 p=5242880 a='1' v='0.3.0'")
+  })
+})
+
+describe('template PowerShell', () => {
+  it('trata caminhos copiados como literais', () => {
+    expect(powershellTemplate).toContain('Test-Path -LiteralPath $_')
+    expect(powershellTemplate).not.toMatch(/Test-Path \$_/)
   })
 })
 
