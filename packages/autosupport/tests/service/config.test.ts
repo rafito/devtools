@@ -111,4 +111,35 @@ describe('loadServiceConfig', () => {
       })
     ).toThrow('AUTOSUPPORT_SENTRY_ORG')
   })
+
+  it('leaves tier maxToolLoops undefined by default (tiers use their own hardcoded default)', () => {
+    const config = loadServiceConfig(required)
+
+    expect(config.tier2MaxToolLoops).toBeUndefined()
+    expect(config.tier3MaxToolLoops).toBeUndefined()
+    expect(config.tier4MaxToolLoops).toBeUndefined()
+  })
+
+  it('parses tier maxToolLoops overrides', () => {
+    const config = loadServiceConfig({
+      ...required,
+      AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS: '20',
+      AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS: '25',
+      AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS: '10',
+    })
+
+    expect(config.tier2MaxToolLoops).toBe(20)
+    expect(config.tier3MaxToolLoops).toBe(25)
+    expect(config.tier4MaxToolLoops).toBe(10)
+  })
+
+  it.each([
+    ['AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS'],
+    ['AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS'],
+    ['AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS'],
+  ])('rejects an invalid %s', (name) => {
+    expect(() => loadServiceConfig({ ...required, [name]: '0' })).toThrow(name)
+    expect(() => loadServiceConfig({ ...required, [name]: '201' })).toThrow(name)
+    expect(() => loadServiceConfig({ ...required, [name]: 'not-a-number' })).toThrow(name)
+  })
 })

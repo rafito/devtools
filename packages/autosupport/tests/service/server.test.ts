@@ -73,7 +73,7 @@ describe('createAutosupportHttpServer', () => {
   it('reports health without authentication', async () => {
     const response = await fetch(`${baseUrl}/health`)
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ status: 'ok', version: '0.6.0' })
+    await expect(response.json()).resolves.toEqual({ status: 'ok', version: '0.7.0' })
   })
 
   it('requires bearer authentication for API routes', async () => {

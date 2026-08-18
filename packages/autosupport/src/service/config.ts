@@ -31,6 +31,16 @@ export type AutosupportServiceConfig = {
   logFilePath?: string
   testCommand?: ServiceTestCommand
   defaultBranch?: string
+  // Orçamento de chamadas de ferramenta por tier. Sem override, cada tier usa
+  // o default hardcoded (tier2=8, tier3=12, tier4=6) — bom o suficiente pra
+  // repositórios pequenos, mas insuficiente pra investigar um monorepo grande
+  // antes de esgotar o loop: o agente lê/grepa o código e nunca chega a criar
+  // o issue (nem erro, nem log — o job pg-boss só "completa" sem efeito
+  // visível). Só o modo standalone tinha esse gap; o embutido em Node já
+  // aceitava via `tier2`/`tier3`/`tier4` na config do `createSupportPipeline`.
+  tier2MaxToolLoops?: number
+  tier3MaxToolLoops?: number
+  tier4MaxToolLoops?: number
 }
 
 type ServiceEnvironment = Record<string, string | undefined>
@@ -53,6 +63,15 @@ function parsePort(raw: string | undefined): number {
     throw new Error('AUTOSUPPORT_PORT deve ser um inteiro entre 1 e 65535')
   }
   return port
+}
+
+function parseMaxToolLoops(raw: string | undefined, name: string): number | undefined {
+  if (!raw) return undefined
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 1 || value > 200) {
+    throw new Error(`${name} deve ser um inteiro entre 1 e 200`)
+  }
+  return value
 }
 
 function parseTestCommand(raw: string | undefined): ServiceTestCommand | undefined {
@@ -194,5 +213,17 @@ export function loadServiceConfig(env: ServiceEnvironment = process.env): Autosu
     logFilePath: optional(env, 'AUTOSUPPORT_LOG_FILE'),
     testCommand: parseTestCommand(optional(env, 'AUTOSUPPORT_TEST_COMMAND_JSON')),
     defaultBranch: optional(env, 'AUTOSUPPORT_DEFAULT_BRANCH'),
+    tier2MaxToolLoops: parseMaxToolLoops(
+      optional(env, 'AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS'),
+      'AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS'
+    ),
+    tier3MaxToolLoops: parseMaxToolLoops(
+      optional(env, 'AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS'),
+      'AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS'
+    ),
+    tier4MaxToolLoops: parseMaxToolLoops(
+      optional(env, 'AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS'),
+      'AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS'
+    ),
   }
 }
