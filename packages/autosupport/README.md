@@ -59,7 +59,7 @@ automatically. A dedicated PostgreSQL database is recommended.
 For a quick run:
 
 ```bash
-npx -y @devorama/autosupport@0.6.0 serve
+npx -y @devorama/autosupport@0.7.0 serve
 ```
 
 For a long-running installation:
@@ -68,7 +68,7 @@ For a long-running installation:
 mkdir autosupport-service
 cd autosupport-service
 npm init -y
-npm install @devorama/autosupport@0.6.0
+npm install @devorama/autosupport@0.7.0
 npx autosupport serve
 ```
 
@@ -114,6 +114,9 @@ It listens on `http://127.0.0.1:4310` by default.
 | `AUTOSUPPORT_TEST_COMMAND_JSON` | no | Safe executable/argument configuration |
 | `AUTOSUPPORT_AUTO_LABEL` | no | Automated PR label; default `support-auto` |
 | `AUTOSUPPORT_DEFAULT_BRANCH` | no | Branch restored after a failed fix; default `main` |
+| `AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS` | no | Tier 2 tool-call budget (investigate + open issue); default `8`. Raise it for large repositories — the agent can exhaust the default budget reading/grepping code before ever calling `create_github_issue`, and the job then completes with no visible effect (no error, no issue) |
+| `AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS` | no | Tier 3 tool-call budget (write fix + open PR); default `12` |
+| `AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS` | no | Tier 4 tool-call budget (review PR); default `6` |
 | `AUTOSUPPORT_SENTRY_API_TOKEN` | no | Sentry API token |
 | `AUTOSUPPORT_SENTRY_ORG` | no | Sentry organization slug |
 | `AUTOSUPPORT_SENTRY_PROJECT` | no | Sentry project slug |
@@ -279,7 +282,7 @@ FROM node:22-bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git grep ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install --global @devorama/autosupport@0.6.0
+RUN npm install --global @devorama/autosupport@0.7.0
 ENTRYPOINT ["autosupport", "serve"]
 ```
 

@@ -41,8 +41,15 @@ export async function startAutosupportService(config: AutosupportServiceConfig) 
       systemPromptBuilder: () =>
         'Você é o agente de suporte técnico. Responda com clareza e encaminhe bugs para investigação.',
     },
+    tier2: {
+      maxToolLoops: config.tier2MaxToolLoops,
+    },
     tier3: {
       defaultBranch: config.defaultBranch,
+      maxToolLoops: config.tier3MaxToolLoops,
+    },
+    tier4: {
+      maxToolLoops: config.tier4MaxToolLoops,
     },
   })
 

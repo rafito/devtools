@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0: minor versions may carry breaking changes.
 
+## [0.7.0] - 2026-08-18
+
+### Added
+
+- `AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS`, `AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS`,
+  `AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS` — per-tier tool-call budget overrides for
+  the standalone service. Previously only the embedded Node factory accepted
+  these via `tier2`/`tier3`/`tier4` config objects; the standalone service had
+  no way to raise the default (tier2=8, tier3=12, tier4=6). Found running the
+  service against a large monorepo: Tier 2 exhausted its default budget
+  reading/grepping code and never reached `create_github_issue` — the pg-boss
+  job completed with no error and no visible effect (no issue, no log line).
+
 ## [0.6.0] - 2026-07-30
 
 ### Added
