@@ -31,3 +31,4 @@ export function createLlmProvider(cfg: LlmConfig): LlmProvider {
 
 // LlmConfig já é exportado localmente acima (export type LlmConfig). Reexporta o resto de types.ts:
 export type { LlmProvider, LlmMessage, LlmRunOptions, LlmRunResult, LlmModelRole } from './types.js'
+export { LlmRunError } from './types.js'

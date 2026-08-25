@@ -1,8 +1,9 @@
-import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import type { LlmMessage, LlmProvider, LlmRunResult } from '../llm/types.js'
 import { resolveSupportRepositories } from '../persistence/drizzle.js'
 import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
+import { logTicketLlmFailure, logTicketLlmUsage } from './usage.js'
 
 export type Tier4Config = {
   llm: LlmProvider
@@ -44,13 +45,20 @@ export function createTier4Agent(cfg: Tier4Config) {
       },
     ]
 
-    await cfg.llm.runWithTools({
-      role: 'heavy',
-      system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
-      messages: initial,
-      tools: cfg.tools,
-      maxToolLoops: cfg.maxToolLoops ?? 6,
-    })
+    let result: LlmRunResult
+    try {
+      result = await cfg.llm.runWithTools({
+        role: 'heavy',
+        system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
+        messages: initial,
+        tools: cfg.tools,
+        maxToolLoops: cfg.maxToolLoops ?? 6,
+      })
+    } catch (error) {
+      logTicketLlmFailure('tier4', ticketId, error)
+      throw error
+    }
+    logTicketLlmUsage('tier4', ticketId, result)
 
     // Status transitions via GitHub webhook (issues.closed after merge)
   }

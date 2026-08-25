@@ -7,10 +7,23 @@ import type {
   UpdateTicketInput,
 } from '../types.js'
 
+export type SentryTicketAdmissionInput = {
+  ticket: CreateTicketInput & { source: 'sentry'; sentryIssueId: string }
+  dailyTicketLimit: number
+  utcDayStart: Date
+  utcDayEnd: Date
+}
+
+export type SentryTicketAdmissionResult =
+  | { kind: 'created'; ticket: SupportTicketRow }
+  | { kind: 'duplicate'; ticket: SupportTicketRow }
+  | { kind: 'daily_limit'; count: number }
+
 export type TicketRepository = {
   findById(id: string): Promise<SupportTicketRow | null>
   findByGithubIssueId(issueNumber: number): Promise<SupportTicketRow | null>
   findByGithubPrId(prNumber: number): Promise<SupportTicketRow | null>
+  admitSentryTicket(input: SentryTicketAdmissionInput): Promise<SentryTicketAdmissionResult>
   create(input: CreateTicketInput): Promise<SupportTicketRow>
   update(id: string, patch: UpdateTicketInput): Promise<void>
 }

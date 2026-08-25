@@ -59,7 +59,7 @@ automatically. A dedicated PostgreSQL database is recommended.
 For a quick run:
 
 ```bash
-npx -y @devorama/autosupport@0.7.0 serve
+npx -y @devorama/autosupport@0.8.0 serve
 ```
 
 For a long-running installation:
@@ -68,7 +68,7 @@ For a long-running installation:
 mkdir autosupport-service
 cd autosupport-service
 npm init -y
-npm install @devorama/autosupport@0.7.0
+npm install @devorama/autosupport@0.8.0
 npx autosupport serve
 ```
 
@@ -117,10 +117,43 @@ It listens on `http://127.0.0.1:4310` by default.
 | `AUTOSUPPORT_TIER2_MAX_TOOL_LOOPS` | no | Tier 2 tool-call budget (investigate + open issue); default `8`. Raise it for large repositories — the agent can exhaust the default budget reading/grepping code before ever calling `create_github_issue`, and the job then completes with no visible effect (no error, no issue) |
 | `AUTOSUPPORT_TIER3_MAX_TOOL_LOOPS` | no | Tier 3 tool-call budget (write fix + open PR); default `12` |
 | `AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS` | no | Tier 4 tool-call budget (review PR); default `6` |
+| `AUTOSUPPORT_TIER2_RETRY_LIMIT` | no | Queue retries after the initial Tier 2 attempt; nonnegative integer, default `3` |
+| `AUTOSUPPORT_TIER3_RETRY_LIMIT` | no | Queue retries after the initial Tier 3 attempt; nonnegative integer, default `1` |
+| `AUTOSUPPORT_TIER4_RETRY_LIMIT` | no | Queue retries after the initial Tier 4 attempt; nonnegative integer, default `1` |
+| `AUTOSUPPORT_AUTO_FIX_ENABLED` | no | When `false`, Tier 2 remains available but Tier 3/4 queues and workers are not started and their enqueue methods fail closed; default `true` |
 | `AUTOSUPPORT_SENTRY_API_TOKEN` | no | Sentry API token |
 | `AUTOSUPPORT_SENTRY_ORG` | no | Sentry organization slug |
 | `AUTOSUPPORT_SENTRY_PROJECT` | no | Sentry project slug |
 | `AUTOSUPPORT_SENTRY_WEBHOOK_SECRET` | no | Sentry webhook signing secret |
+| `AUTOSUPPORT_SENTRY_INGEST_ENABLED` | no | Accept new Sentry tickets. When `false`, signed webhooks receive HTTP 200 with `handled: false`; default `true` |
+| `AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT` | no | Maximum persisted Sentry tickets per UTC day; nonnegative integer, `0` means unlimited (default) |
+| `AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON` | no | JSON string array of case-insensitive title substrings to ignore, for example `["circuit breaker","throttle"]`; default `[]` |
+
+Recommended cost-control starting point:
+
+```bash
+export AUTOSUPPORT_SENTRY_INGEST_ENABLED='false'
+export AUTOSUPPORT_AUTO_FIX_ENABLED='false'
+export AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT='5'
+export AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON='["circuit breaker","throttle"]'
+export AUTOSUPPORT_TIER2_RETRY_LIMIT='0'
+export AUTOSUPPORT_TIER3_RETRY_LIMIT='0'
+export AUTOSUPPORT_TIER4_RETRY_LIMIT='0'
+```
+
+Sentry deduplication, daily-limit checking, and ticket creation execute as one
+atomic PostgreSQL admission under a transaction-scoped advisory lock, so they
+remain correct across concurrent deliveries and service processes. The daily
+window is always midnight-to-midnight UTC. Duplicate delivery retries Tier 2
+enqueue for a still-open ticket, while a deterministic pg-boss job ID collapses
+concurrent enqueue attempts and response-loss retries.
+
+Every Tier 2–4 LLM run with at least one completed model step emits an
+`[autosupport-llm-usage]` JSON log with the tier, ticket, aggregated
+input/output/cache tokens, step count, provider, and model when available. If a
+later model step fails, usage from already-completed steps is logged once with
+`failed: true`; a failure before the first completed step has no provider usage
+metadata to report.
 
 Test commands are JSON, not shell strings:
 
@@ -282,7 +315,7 @@ FROM node:22-bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git grep ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install --global @devorama/autosupport@0.7.0
+RUN npm install --global @devorama/autosupport@0.8.0
 ENTRYPOINT ["autosupport", "serve"]
 ```
 
@@ -297,7 +330,7 @@ Node.js applications can keep the pipeline in-process:
 npm install @devorama/autosupport
 ```
 
-Version `0.6.x` requires Node.js 22 or newer.
+Version `0.8.x` requires Node.js 22 or newer.
 
 Drizzle, pg-boss, and the LLM SDK integrations are installed by the package.
 Express remains your application's choice; it is not required by the standalone
@@ -329,8 +362,15 @@ const support = createSupportPipeline({
     orgSlug: process.env.SENTRY_ORG ?? '',
     projectSlug: process.env.SENTRY_PROJECT ?? '',
     webhookSecret: process.env.SENTRY_WEBHOOK_SECRET ?? '',
+    ingestEnabled: false,
+    dailyTicketLimit: 5,
+    ignoredTitlePatterns: ['circuit breaker', 'throttle'],
   },
-  queue: { connectionString: process.env.DATABASE_URL! },
+  queue: {
+    connectionString: process.env.DATABASE_URL!,
+    retries: { tier2: 0, tier3: 0, tier4: 0 },
+  },
+  autoFixEnabled: false,
   rootDir: process.cwd(),
   tier1: {
     systemPromptBuilder: buildTier1Prompt,
@@ -403,7 +443,11 @@ createSupportPipeline({
 ```
 
 See the exported `TicketRepository`, `ConversationRepository`, and
-`SupportRepositories` types.
+`SupportRepositories` types. In 0.8.0, custom ticket repositories must also
+implement atomic `admitSentryTicket`. It must serialize exact issue lookup,
+UTC-window count, and insertion and return the documented `created`,
+`duplicate`, or `daily_limit` discriminated result. The built-in Drizzle
+adapter uses a PostgreSQL transaction-scoped advisory lock.
 
 ### Database schema for embedded mode
 

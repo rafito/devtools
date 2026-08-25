@@ -1,6 +1,6 @@
 {
   "name": "@devorama/autosupport",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Cross-stack autonomous support pipeline: embed in Node.js or run the HTTP service alongside FastAPI, Django, Rails, Laravel, Spring, and other backends.",
   "type": "module",
   "exports": {

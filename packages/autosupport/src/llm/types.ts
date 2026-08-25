@@ -17,6 +17,28 @@ export type LlmRunResult = {
   text: string
   steps: number
   finishReason: string | null
+  /** Aggregated token usage across every generateText step. */
+  usage?: {
+    inputTokens: number | undefined
+    outputTokens: number | undefined
+    totalTokens: number | undefined
+    cacheReadTokens: number | undefined
+    cacheWriteTokens: number | undefined
+  }
+  model?: string
+  provider?: string
+}
+
+export class LlmRunError extends Error {
+  readonly partialResult: LlmRunResult
+  readonly cause: unknown
+
+  constructor(message: string, partialResult: LlmRunResult, cause: unknown) {
+    super(message)
+    this.name = 'LlmRunError'
+    this.partialResult = partialResult
+    this.cause = cause
+  }
 }
 
 export interface LlmProvider {

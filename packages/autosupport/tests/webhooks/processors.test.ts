@@ -12,6 +12,7 @@ function createRepositories() {
       findById: vi.fn(),
       findByGithubIssueId: vi.fn(),
       findByGithubPrId: vi.fn(),
+      admitSentryTicket: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -57,7 +58,10 @@ describe('framework-neutral webhook processors', () => {
 
   it('processes Sentry raw requests through repositories', async () => {
     const repositories = createRepositories()
-    repositories.tickets.create.mockResolvedValue({ id: 'ticket-1' })
+    repositories.tickets.admitSentryTicket.mockResolvedValue({
+      kind: 'created',
+      ticket: { id: 'ticket-1', status: 'open' },
+    })
     const rawBody = Buffer.from(
       JSON.stringify({
         action: 'created',
@@ -86,7 +90,7 @@ describe('framework-neutral webhook processors', () => {
 
     expect(result.status).toBe(200)
     expect(result.body).toMatchObject({ handled: true, ticketId: 'ticket-1' })
-    expect(repositories.tickets.create).toHaveBeenCalled()
+    expect(repositories.tickets.admitSentryTicket).toHaveBeenCalled()
     expect(queue.enqueueTier2).toHaveBeenCalledWith('ticket-1')
   })
 

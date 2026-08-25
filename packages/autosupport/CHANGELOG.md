@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0: minor versions may carry breaking changes.
 
+## [0.8.0] - 2026-08-25
+
+### Added
+
+- Standalone Sentry cost controls: an ingestion kill switch, a persistent UTC
+  daily ticket limit, exact Sentry issue deduplication, and case-insensitive
+  ignored title patterns.
+- `AUTOSUPPORT_AUTO_FIX_ENABLED` to keep Tier 2 investigation available while
+  fail-closing Tier 3/4 enqueue and worker registration.
+- Per-tier pg-boss retry controls, including zero retries, through
+  `AUTOSUPPORT_TIER2_RETRY_LIMIT`, `AUTOSUPPORT_TIER3_RETRY_LIMIT`, and
+  `AUTOSUPPORT_TIER4_RETRY_LIMIT`.
+- Structured `[autosupport-llm-usage]` logs with aggregated input, output, and
+  cache tokens plus tier, ticket, steps, provider, and model metadata. Usage
+  from completed steps is also reported if a later model step fails.
+
+### Changed
+
+- `TicketRepository` now exposes one atomic `admitSentryTicket` operation. The
+  built-in Drizzle adapter serializes duplicate lookup, UTC daily count, and
+  insertion with a transaction-scoped PostgreSQL advisory lock.
+- Tier 2 jobs use deterministic pg-boss IDs keyed by ticket, and duplicate
+  Sentry deliveries retry enqueue for open persisted tickets. This repairs
+  enqueue failures and suppresses concurrent or response-loss duplicates.
+
 ## [0.7.0] - 2026-08-18
 
 ### Added

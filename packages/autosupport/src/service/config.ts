@@ -27,7 +27,11 @@ export type AutosupportServiceConfig = {
     orgSlug: string
     projectSlug: string
     webhookSecret: string
+    ingestEnabled: boolean
+    dailyTicketLimit: number
+    ignoredTitlePatterns: string[]
   }
+  autoFixEnabled: boolean
   logFilePath?: string
   testCommand?: ServiceTestCommand
   defaultBranch?: string
@@ -41,6 +45,9 @@ export type AutosupportServiceConfig = {
   tier2MaxToolLoops?: number
   tier3MaxToolLoops?: number
   tier4MaxToolLoops?: number
+  tier2RetryLimit: number
+  tier3RetryLimit: number
+  tier4RetryLimit: number
 }
 
 type ServiceEnvironment = Record<string, string | undefined>
@@ -72,6 +79,41 @@ function parseMaxToolLoops(raw: string | undefined, name: string): number | unde
     throw new Error(`${name} deve ser um inteiro entre 1 e 200`)
   }
   return value
+}
+
+function parseBoolean(raw: string | undefined, name: string, defaultValue: boolean): boolean {
+  if (raw === undefined) return defaultValue
+  if (raw.toLowerCase() === 'true') return true
+  if (raw.toLowerCase() === 'false') return false
+  throw new Error(`${name} deve ser true ou false`)
+}
+
+function parseNonnegativeInteger(
+  raw: string | undefined,
+  name: string,
+  defaultValue: number
+): number {
+  if (raw === undefined) return defaultValue
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} deve ser um inteiro não negativo`)
+  }
+  return value
+}
+
+function parseIgnoredTitlePatterns(raw: string | undefined): string[] {
+  if (raw === undefined) return []
+
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    throw new Error('AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON deve conter JSON válido')
+  }
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw new Error('AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON deve ser uma lista de strings')
+  }
+  return value.map((entry) => entry.trim()).filter(Boolean)
 }
 
 function parseTestCommand(raw: string | undefined): ServiceTestCommand | undefined {
@@ -181,6 +223,19 @@ export function loadServiceConfig(env: ServiceEnvironment = process.env): Autosu
     orgSlug: optional(env, 'AUTOSUPPORT_SENTRY_ORG') ?? '',
     projectSlug: optional(env, 'AUTOSUPPORT_SENTRY_PROJECT') ?? '',
     webhookSecret: optional(env, 'AUTOSUPPORT_SENTRY_WEBHOOK_SECRET') ?? '',
+    ingestEnabled: parseBoolean(
+      optional(env, 'AUTOSUPPORT_SENTRY_INGEST_ENABLED'),
+      'AUTOSUPPORT_SENTRY_INGEST_ENABLED',
+      true
+    ),
+    dailyTicketLimit: parseNonnegativeInteger(
+      optional(env, 'AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT'),
+      'AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT',
+      0
+    ),
+    ignoredTitlePatterns: parseIgnoredTitlePatterns(
+      optional(env, 'AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON')
+    ),
   }
   if (sentry.webhookSecret && !sentry.projectSlug) {
     throw new Error(
@@ -210,6 +265,11 @@ export function loadServiceConfig(env: ServiceEnvironment = process.env): Autosu
       autoLabel: optional(env, 'AUTOSUPPORT_AUTO_LABEL'),
     },
     sentry,
+    autoFixEnabled: parseBoolean(
+      optional(env, 'AUTOSUPPORT_AUTO_FIX_ENABLED'),
+      'AUTOSUPPORT_AUTO_FIX_ENABLED',
+      true
+    ),
     logFilePath: optional(env, 'AUTOSUPPORT_LOG_FILE'),
     testCommand: parseTestCommand(optional(env, 'AUTOSUPPORT_TEST_COMMAND_JSON')),
     defaultBranch: optional(env, 'AUTOSUPPORT_DEFAULT_BRANCH'),
@@ -224,6 +284,21 @@ export function loadServiceConfig(env: ServiceEnvironment = process.env): Autosu
     tier4MaxToolLoops: parseMaxToolLoops(
       optional(env, 'AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS'),
       'AUTOSUPPORT_TIER4_MAX_TOOL_LOOPS'
+    ),
+    tier2RetryLimit: parseNonnegativeInteger(
+      optional(env, 'AUTOSUPPORT_TIER2_RETRY_LIMIT'),
+      'AUTOSUPPORT_TIER2_RETRY_LIMIT',
+      3
+    ),
+    tier3RetryLimit: parseNonnegativeInteger(
+      optional(env, 'AUTOSUPPORT_TIER3_RETRY_LIMIT'),
+      'AUTOSUPPORT_TIER3_RETRY_LIMIT',
+      1
+    ),
+    tier4RetryLimit: parseNonnegativeInteger(
+      optional(env, 'AUTOSUPPORT_TIER4_RETRY_LIMIT'),
+      'AUTOSUPPORT_TIER4_RETRY_LIMIT',
+      1
     ),
   }
 }

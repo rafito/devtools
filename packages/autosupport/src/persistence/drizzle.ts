@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, count, eq, gte, lt, sql } from 'drizzle-orm'
 import type { SupportSchema } from '../schema/index.js'
 import type {
   CreateConversationInput,
@@ -9,7 +9,11 @@ import type {
   SupportTicketRow,
   UpdateTicketInput,
 } from '../types.js'
-import type { SupportRepositories } from './types.js'
+import type {
+  SentryTicketAdmissionInput,
+  SentryTicketAdmissionResult,
+  SupportRepositories,
+} from './types.js'
 
 export type DrizzlePersistenceConfig = {
   repositories?: never
@@ -52,6 +56,52 @@ export function createDrizzleRepositories(
         .from(schema.supportTickets)
         .where(eq(schema.supportTickets.githubPrId, prNumber))
       return (ticket as SupportTicketRow | undefined) ?? null
+    },
+
+    async admitSentryTicket(
+      input: SentryTicketAdmissionInput
+    ): Promise<SentryTicketAdmissionResult> {
+      if (!Number.isInteger(input.dailyTicketLimit) || input.dailyTicketLimit < 0) {
+        throw new Error('dailyTicketLimit deve ser um inteiro não negativo')
+      }
+
+      return db.transaction(async (tx: SupportDb) => {
+        // The transaction-scoped advisory lock serializes all Sentry admissions
+        // across service processes sharing this PostgreSQL database. Duplicate
+        // lookup, daily-cap count, and insert therefore form one atomic decision.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext('devorama-autosupport-sentry-admission'))`
+        )
+
+        const [duplicate] = await tx
+          .select()
+          .from(schema.supportTickets)
+          .where(eq(schema.supportTickets.sentryIssueId, input.ticket.sentryIssueId))
+        if (duplicate) {
+          return { kind: 'duplicate', ticket: duplicate as SupportTicketRow }
+        }
+
+        if (input.dailyTicketLimit > 0) {
+          const [result] = await tx
+            .select({ value: count() })
+            .from(schema.supportTickets)
+            .where(
+              and(
+                eq(schema.supportTickets.source, 'sentry'),
+                gte(schema.supportTickets.createdAt, input.utcDayStart),
+                lt(schema.supportTickets.createdAt, input.utcDayEnd)
+              )
+            )
+          const dailyCount = Number(result?.value ?? 0)
+          if (dailyCount >= input.dailyTicketLimit) {
+            return { kind: 'daily_limit', count: dailyCount }
+          }
+        }
+
+        const [ticket] = await tx.insert(schema.supportTickets).values(input.ticket).returning()
+        if (!ticket) throw new Error('Falha ao criar ticket de suporte')
+        return { kind: 'created', ticket: ticket as SupportTicketRow }
+      })
     },
 
     async create(input: CreateTicketInput): Promise<SupportTicketRow> {

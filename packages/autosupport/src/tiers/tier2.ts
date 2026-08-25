@@ -1,9 +1,10 @@
-import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import type { LlmMessage, LlmProvider, LlmRunResult } from '../llm/types.js'
 import { resolveSupportRepositories } from '../persistence/drizzle.js'
 import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
+import { logTicketLlmFailure, logTicketLlmUsage } from './usage.js'
 
 export type Tier2Config = {
   llm: LlmProvider
@@ -14,6 +15,7 @@ export type Tier2Config = {
   schema?: SupportSchema
   tools: ToolBundle
   enqueueTier3: (ticketId: string) => Promise<unknown>
+  autoFixEnabled?: boolean
 }
 
 const DEFAULT_SYSTEM = `Você é um agente de investigação técnica. Receberá a descrição de um bug reportado e deve:
@@ -43,7 +45,7 @@ export function createTier2Agent(cfg: Tier2Config) {
   async function run(ticketId: string): Promise<void> {
     const ticket = await repositories.tickets.findById(ticketId)
     if (!ticket) throw new Error(`Ticket ${ticketId} não encontrado`)
-    if (ticket.githubIssueId) return // idempotência
+    if (ticket.status !== 'open' || ticket.githubIssueId) return // idempotência
 
     const transcript = await loadConversationTranscript(repositories, ticket.conversationId)
 
@@ -63,19 +65,26 @@ export function createTier2Agent(cfg: Tier2Config) {
       },
     ]
 
-    await cfg.llm.runWithTools({
-      role: 'heavy',
-      system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
-      messages: initial,
-      tools: cfg.tools,
-      maxToolLoops: cfg.maxToolLoops ?? 8,
-      onToolResult: (name, _input, result) => {
-        const issue = result as { issueNumber?: number }
-        if (name === 'create_github_issue' && issue.issueNumber) {
-          githubIssueId = issue.issueNumber
-        }
-      },
-    })
+    let result: LlmRunResult
+    try {
+      result = await cfg.llm.runWithTools({
+        role: 'heavy',
+        system: cfg.systemPrompt ?? DEFAULT_SYSTEM,
+        messages: initial,
+        tools: cfg.tools,
+        maxToolLoops: cfg.maxToolLoops ?? 8,
+        onToolResult: (name, _input, result) => {
+          const issue = result as { issueNumber?: number }
+          if (name === 'create_github_issue' && issue.issueNumber) {
+            githubIssueId = issue.issueNumber
+          }
+        },
+      })
+    } catch (error) {
+      logTicketLlmFailure('tier2', ticketId, error)
+      throw error
+    }
+    logTicketLlmUsage('tier2', ticketId, result)
 
     await repositories.tickets.update(ticketId, {
       status: 'investigating',
@@ -83,7 +92,7 @@ export function createTier2Agent(cfg: Tier2Config) {
       updatedAt: new Date(),
     })
 
-    if (githubIssueId) {
+    if (githubIssueId && cfg.autoFixEnabled !== false) {
       try {
         await cfg.enqueueTier3(ticketId)
       } catch {

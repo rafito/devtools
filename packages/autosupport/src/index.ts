@@ -35,6 +35,8 @@ export type {
 } from './persistence/drizzle.js'
 export type {
   TicketRepository,
+  SentryTicketAdmissionInput,
+  SentryTicketAdmissionResult,
   ConversationRepository,
   SupportRepositories,
   RepositoryPersistenceConfig,
@@ -100,6 +102,7 @@ export type {
 
 // LLM provider port
 export { createLlmProvider } from './llm/index.js'
+export { LlmRunError } from './llm/index.js'
 export type {
   LlmProvider,
   LlmConfig,
