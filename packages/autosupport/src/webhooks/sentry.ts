@@ -20,6 +20,9 @@ export type SentryWebhookDeps = {
   queue: SupportQueue
   webhookSecret: string
   projectSlug: string
+  ingestEnabled?: boolean
+  dailyTicketLimit?: number
+  ignoredTitlePatterns?: string[]
 }
 
 type SentryWebhookBody = {
@@ -44,9 +47,23 @@ function secureEqual(actual: string, expected: string): boolean {
   )
 }
 
+function currentUtcDayRange(now: Date): { start: Date; end: Date } {
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+  )
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) }
+}
+
 export function createSentryWebhookProcessor(deps: SentryWebhookDeps) {
   if (!deps.webhookSecret) throw new Error('webhookSecret não configurado')
   if (!deps.projectSlug) throw new Error('projectSlug não configurado')
+  const dailyTicketLimit = deps.dailyTicketLimit ?? 0
+  if (!Number.isInteger(dailyTicketLimit) || dailyTicketLimit < 0) {
+    throw new Error('dailyTicketLimit deve ser um inteiro não negativo')
+  }
+  const ignoredTitlePatterns = (deps.ignoredTitlePatterns ?? [])
+    .map((pattern) => pattern.trim().toLowerCase())
+    .filter(Boolean)
   const repositories = resolveSupportRepositories(deps)
 
   function verifySignature(payload: Buffer, signature: string): boolean {
@@ -86,20 +103,70 @@ export function createSentryWebhookProcessor(deps: SentryWebhookDeps) {
       return { status: 200, body: { received: true, handled: false } }
     }
 
+    if (deps.ingestEnabled === false) {
+      return {
+        status: 200,
+        body: { received: true, handled: false, reason: 'sentry_ingest_disabled' },
+      }
+    }
+
+    const sentryIssueId = String(issue.id)
+    const normalizedTitle = (issue.title ?? '').toLowerCase()
+    if (ignoredTitlePatterns.some((pattern) => normalizedTitle.includes(pattern))) {
+      return {
+        status: 200,
+        body: { received: true, handled: false, reason: 'ignored_sentry_title' },
+      }
+    }
+
     const description = `[Sentry] ${issue.title ?? 'Erro sem título'}\nCulprit: ${
       issue.culprit ?? 'desconhecido'
     }\n${issue.permalink ?? ''}`.trim()
-
-    const ticket = await repositories.tickets.create({
-      tenantId: null,
-      userId: null,
-      description,
-      source: 'sentry',
-      sentryIssueId: String(issue.id),
-      status: 'open',
+    const { start, end } = currentUtcDayRange(new Date())
+    const admission = await repositories.tickets.admitSentryTicket({
+      ticket: {
+        tenantId: null,
+        userId: null,
+        description,
+        source: 'sentry',
+        sentryIssueId,
+        status: 'open',
+      },
+      dailyTicketLimit,
+      utcDayStart: start,
+      utcDayEnd: end,
     })
 
-    await deps.queue.enqueueTier2(ticket.id)
+    if (admission.kind === 'daily_limit') {
+      return {
+        status: 200,
+        body: {
+          received: true,
+          handled: false,
+          reason: 'sentry_daily_ticket_limit_reached',
+          limit: dailyTicketLimit,
+        },
+      }
+    }
+
+    const ticket = admission.ticket
+    // Duplicate deliveries retry enqueue for still-open tickets. This repairs
+    // persistence-before-enqueue failures and response-loss retries; the queue
+    // uses a deterministic pg-boss job ID to collapse concurrent attempts.
+    if (ticket.status === 'open') await deps.queue.enqueueTier2(ticket.id)
+
+    if (admission.kind === 'duplicate') {
+      return {
+        status: 200,
+        body: {
+          received: true,
+          handled: false,
+          reason: 'duplicate_sentry_issue',
+          ticketId: ticket.id,
+        },
+      }
+    }
+
     console.log(`[autosupport-sentry-webhook] ticket ${ticket.id} criado para issue ${issue.id}`)
     return {
       status: 200,

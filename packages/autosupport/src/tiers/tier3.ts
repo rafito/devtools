@@ -2,12 +2,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { GitHubClient } from '../clients/github.js'
 import { toErrorMessage } from '../errors.js'
-import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import type { LlmMessage, LlmProvider, LlmRunResult } from '../llm/types.js'
 import { resolveSupportRepositories } from '../persistence/drizzle.js'
 import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
 import type { SupportDb, ToolBundle } from '../types.js'
 import { loadConversationTranscript } from './conversation.js'
+import { logTicketLlmFailure, logTicketLlmUsage } from './usage.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -108,26 +109,33 @@ export function createTier3Agent(cfg: Tier3Config) {
       },
     ]
 
-    await cfg.llm.runWithTools({
-      role: 'heavy',
-      system: cfg.systemPrompt ?? DEFAULT_SYSTEM(branchPrefix, cfg.runTests ?? false),
-      messages: initial,
-      tools: cfg.tools,
-      maxToolLoops: cfg.maxToolLoops ?? 12,
-      onToolResult: (name, input, result) => {
-        const r = result as { prNumber?: number; success?: boolean }
-        const args = input as { path?: string; name?: string }
-        if (name === 'create_pr' && r?.prNumber) {
-          prNumber = r.prNumber
-        }
-        if (name === 'write_file' && r?.success) {
-          if (typeof args?.path === 'string') writtenFiles.push(args.path)
-        }
-        if (name === 'git_branch' && r?.success) {
-          if (typeof args?.name === 'string') branchesCreated.push(args.name)
-        }
-      },
-    })
+    let result: LlmRunResult
+    try {
+      result = await cfg.llm.runWithTools({
+        role: 'heavy',
+        system: cfg.systemPrompt ?? DEFAULT_SYSTEM(branchPrefix, cfg.runTests ?? false),
+        messages: initial,
+        tools: cfg.tools,
+        maxToolLoops: cfg.maxToolLoops ?? 12,
+        onToolResult: (name, input, result) => {
+          const r = result as { prNumber?: number; success?: boolean }
+          const args = input as { path?: string; name?: string }
+          if (name === 'create_pr' && r?.prNumber) {
+            prNumber = r.prNumber
+          }
+          if (name === 'write_file' && r?.success) {
+            if (typeof args?.path === 'string') writtenFiles.push(args.path)
+          }
+          if (name === 'git_branch' && r?.success) {
+            if (typeof args?.name === 'string') branchesCreated.push(args.name)
+          }
+        },
+      })
+    } catch (error) {
+      logTicketLlmFailure('tier3', ticketId, error)
+      throw error
+    }
+    logTicketLlmUsage('tier3', ticketId, result)
 
     if (prNumber) {
       await repositories.tickets.update(ticketId, {

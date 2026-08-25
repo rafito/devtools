@@ -32,7 +32,15 @@ export async function startAutosupportService(config: AutosupportServiceConfig) 
     llm: config.llm,
     github: config.github,
     sentry: config.sentry,
-    queue: { connectionString: config.databaseUrl },
+    queue: {
+      connectionString: config.databaseUrl,
+      retries: {
+        tier2: config.tier2RetryLimit,
+        tier3: config.tier3RetryLimit,
+        tier4: config.tier4RetryLimit,
+      },
+    },
+    autoFixEnabled: config.autoFixEnabled,
     rootDir: config.rootDir,
     logFilePath: config.logFilePath,
     testCommand: config.testCommand,
@@ -68,6 +76,9 @@ export async function startAutosupportService(config: AutosupportServiceConfig) 
           queue: pipeline.queue,
           webhookSecret: config.sentry.webhookSecret,
           projectSlug: config.sentry.projectSlug,
+          ingestEnabled: config.sentry.ingestEnabled,
+          dailyTicketLimit: config.sentry.dailyTicketLimit,
+          ignoredTitlePatterns: config.sentry.ignoredTitlePatterns,
         })
       : undefined
 

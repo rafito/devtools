@@ -19,6 +19,13 @@ describe('loadServiceConfig', () => {
     expect(config.port).toBe(4310)
     expect(config.llm).toEqual({ provider: 'openai', apiKey: 'openai-key' })
     expect(config.github.repo).toBe('org/repo')
+    expect(config.sentry.ingestEnabled).toBe(true)
+    expect(config.sentry.dailyTicketLimit).toBe(0)
+    expect(config.sentry.ignoredTitlePatterns).toEqual([])
+    expect(config.autoFixEnabled).toBe(true)
+    expect(config.tier2RetryLimit).toBe(3)
+    expect(config.tier3RetryLimit).toBe(1)
+    expect(config.tier4RetryLimit).toBe(1)
   })
 
   it('supports Anthropic, model overrides, Sentry, and pytest configuration', () => {
@@ -131,6 +138,64 @@ describe('loadServiceConfig', () => {
     expect(config.tier2MaxToolLoops).toBe(20)
     expect(config.tier3MaxToolLoops).toBe(25)
     expect(config.tier4MaxToolLoops).toBe(10)
+  })
+
+  it('parses cost-control flags, Sentry filters, and retry limits', () => {
+    const config = loadServiceConfig({
+      ...required,
+      AUTOSUPPORT_SENTRY_INGEST_ENABLED: 'false',
+      AUTOSUPPORT_AUTO_FIX_ENABLED: 'FALSE',
+      AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT: '12',
+      AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON: JSON.stringify([
+        'circuit breaker',
+        'throttle',
+      ]),
+      AUTOSUPPORT_TIER2_RETRY_LIMIT: '0',
+      AUTOSUPPORT_TIER3_RETRY_LIMIT: '2',
+      AUTOSUPPORT_TIER4_RETRY_LIMIT: '4',
+    })
+
+    expect(config.sentry).toMatchObject({
+      ingestEnabled: false,
+      dailyTicketLimit: 12,
+      ignoredTitlePatterns: ['circuit breaker', 'throttle'],
+    })
+    expect(config.autoFixEnabled).toBe(false)
+    expect(config.tier2RetryLimit).toBe(0)
+    expect(config.tier3RetryLimit).toBe(2)
+    expect(config.tier4RetryLimit).toBe(4)
+  })
+
+  it.each([
+    ['AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT', '-1'],
+    ['AUTOSUPPORT_SENTRY_DAILY_TICKET_LIMIT', '1.5'],
+    ['AUTOSUPPORT_TIER2_RETRY_LIMIT', '-1'],
+    ['AUTOSUPPORT_TIER3_RETRY_LIMIT', '1.5'],
+    ['AUTOSUPPORT_TIER4_RETRY_LIMIT', 'nope'],
+  ])('rejects invalid nonnegative integer %s=%s', (name, value) => {
+    expect(() => loadServiceConfig({ ...required, [name]: value })).toThrow(name)
+  })
+
+  it.each(['AUTOSUPPORT_SENTRY_INGEST_ENABLED', 'AUTOSUPPORT_AUTO_FIX_ENABLED'])(
+    'rejects invalid boolean %s',
+    (name) => {
+      expect(() => loadServiceConfig({ ...required, [name]: 'yes' })).toThrow(name)
+    }
+  )
+
+  it('rejects malformed or non-string Sentry ignored patterns', () => {
+    expect(() =>
+      loadServiceConfig({
+        ...required,
+        AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON: '{',
+      })
+    ).toThrow('AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON')
+    expect(() =>
+      loadServiceConfig({
+        ...required,
+        AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON: JSON.stringify(['ok', 42]),
+      })
+    ).toThrow('AUTOSUPPORT_SENTRY_IGNORED_TITLE_PATTERNS_JSON')
   })
 
   it.each([

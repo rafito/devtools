@@ -9,6 +9,9 @@ const schema = {
     id: 'ticket-id',
     githubIssueId: 'github-issue-id',
     githubPrId: 'github-pr-id',
+    sentryIssueId: 'sentry-issue-id',
+    source: 'source',
+    createdAt: 'created-at',
   },
   supportConversations: {
     id: 'conversation-id',
@@ -16,23 +19,44 @@ const schema = {
   },
 } as any
 
-function createDb(rows: unknown[] = []) {
-  const where = vi.fn().mockResolvedValue(rows)
+function createDb(
+  rows: unknown[] = [],
+  options: { selectRows?: unknown[][]; returningRows?: unknown[] } = {}
+) {
+  const selectRows = options.selectRows ? [...options.selectRows] : undefined
+  const order: string[] = []
+  const where = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(selectRows ? (selectRows.shift() ?? []) : rows))
   const from = vi.fn().mockReturnValue({ where })
-  const select = vi.fn().mockReturnValue({ from })
+  const select = vi.fn().mockImplementation(() => {
+    order.push('select')
+    return { from }
+  })
   const updateWhere = vi.fn().mockResolvedValue(undefined)
   const set = vi.fn().mockReturnValue({ where: updateWhere })
   const update = vi.fn().mockReturnValue({ set })
-  const returning = vi.fn().mockResolvedValue(rows)
+  const returning = vi.fn().mockResolvedValue(options.returningRows ?? rows)
   const values = vi.fn().mockReturnValue({ returning })
-  const insert = vi.fn().mockReturnValue({ values })
+  const insert = vi.fn().mockImplementation(() => {
+    order.push('insert')
+    return { values }
+  })
+  const execute = vi.fn().mockImplementation(() => {
+    order.push('lock')
+    return Promise.resolve(undefined)
+  })
 
-  return {
+  const db: any = {
     select,
     update,
     insert,
-    _calls: { where, from, set, updateWhere, values, returning },
+    execute,
+    transaction: vi.fn(async (callback: (tx: any) => Promise<unknown>) => callback(db)),
+    _calls: { where, from, set, updateWhere, values, returning, execute, order },
   }
+
+  return db
 }
 
 describe('createDrizzleRepositories', () => {
@@ -49,6 +73,60 @@ describe('createDrizzleRepositories', () => {
   it('returns null when a ticket does not exist', async () => {
     const repositories = createDrizzleRepositories(createDb([]), schema)
     await expect(repositories.tickets.findByGithubIssueId(42)).resolves.toBeNull()
+  })
+
+  it('atomically admits a new Sentry ticket inside an advisory-locked transaction', async () => {
+    const ticket = { id: 'ticket-1', sentryIssueId: 'sentry-123' }
+    const db = createDb([], { selectRows: [[]], returningRows: [ticket] })
+    const repositories = createDrizzleRepositories(db, schema)
+    const start = new Date('2026-08-25T00:00:00.000Z')
+    const end = new Date('2026-08-26T00:00:00.000Z')
+
+    await expect(
+      repositories.tickets.admitSentryTicket({
+        ticket: { description: 'bug', source: 'sentry', sentryIssueId: 'sentry-123' },
+        dailyTicketLimit: 0,
+        utcDayStart: start,
+        utcDayEnd: end,
+      })
+    ).resolves.toEqual({ kind: 'created', ticket })
+    expect(db.transaction).toHaveBeenCalledOnce()
+    expect(db._calls.execute).toHaveBeenCalledOnce()
+    expect(db._calls.order).toEqual(['lock', 'select', 'insert'])
+    expect(db._calls.values).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'sentry', sentryIssueId: 'sentry-123' })
+    )
+  })
+
+  it('returns the existing ticket from atomic Sentry admission', async () => {
+    const ticket = { id: 'ticket-existing', sentryIssueId: 'sentry-123' }
+    const db = createDb([], { selectRows: [[ticket]] })
+    const repositories = createDrizzleRepositories(db, schema)
+
+    await expect(
+      repositories.tickets.admitSentryTicket({
+        ticket: { description: 'bug', source: 'sentry', sentryIssueId: 'sentry-123' },
+        dailyTicketLimit: 5,
+        utcDayStart: new Date('2026-08-25T00:00:00.000Z'),
+        utcDayEnd: new Date('2026-08-26T00:00:00.000Z'),
+      })
+    ).resolves.toEqual({ kind: 'duplicate', ticket })
+    expect(db.insert).not.toHaveBeenCalled()
+  })
+
+  it('returns daily_limit without inserting when atomic admission reaches the UTC cap', async () => {
+    const db = createDb([], { selectRows: [[], [{ value: 5 }]] })
+    const repositories = createDrizzleRepositories(db, schema)
+
+    await expect(
+      repositories.tickets.admitSentryTicket({
+        ticket: { description: 'bug', source: 'sentry', sentryIssueId: 'sentry-456' },
+        dailyTicketLimit: 5,
+        utcDayStart: new Date('2026-08-25T00:00:00.000Z'),
+        utcDayEnd: new Date('2026-08-26T00:00:00.000Z'),
+      })
+    ).resolves.toEqual({ kind: 'daily_limit', count: 5 })
+    expect(db.insert).not.toHaveBeenCalled()
   })
 
   it('creates and updates tickets', async () => {

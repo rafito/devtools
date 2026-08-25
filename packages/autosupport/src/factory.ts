@@ -38,8 +38,15 @@ export type SupportPipelineConfig = {
     orgSlug: string
     projectSlug: string
     webhookSecret: string
+    ingestEnabled?: boolean
+    dailyTicketLimit?: number
+    ignoredTitlePatterns?: string[]
   }
-  queue: { connectionString: string }
+  queue: {
+    connectionString: string
+    retries?: { tier2?: number; tier3?: number; tier4?: number }
+  }
+  autoFixEnabled?: boolean
 
   // Tier 2-4 environment
   rootDir: string
@@ -220,6 +227,7 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
     repositories,
     tools: tier2Tools,
     enqueueTier3: (id) => queue.enqueueTier3(id),
+    autoFixEnabled: cfg.autoFixEnabled,
   })
   const tier3 = createTier3Agent({
     llm,
@@ -252,6 +260,8 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
   // Queue wired after agents (needs agent runners)
   queue = createSupportQueue({
     connectionString: cfg.queue.connectionString,
+    retries: cfg.queue.retries,
+    autoFixEnabled: cfg.autoFixEnabled,
     runners: {
       tier2: (id) => tier2.run(id),
       tier3: (id) => tier3.run(id),
@@ -276,6 +286,9 @@ export function createSupportPipeline(cfg: SupportPipelineConfig): SupportPipeli
           queue,
           webhookSecret: cfg.sentry.webhookSecret,
           projectSlug: cfg.sentry.projectSlug,
+          ingestEnabled: cfg.sentry.ingestEnabled,
+          dailyTicketLimit: cfg.sentry.dailyTicketLimit,
+          ignoredTitlePatterns: cfg.sentry.ignoredTitlePatterns,
         })
       : ((async (_req: WebhookAdapterRequest, res: WebhookAdapterResponse) =>
           res.status(503).json({

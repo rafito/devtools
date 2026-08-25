@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createSupportPipeline } from '../src/factory'
 import type { UserContext } from '../src/types'
@@ -87,6 +88,58 @@ describe('createSupportPipeline', () => {
     })
 
     expect(p.repositories).toBe(repositories)
+  })
+
+  it('wires Sentry ingestion controls into the embedded webhook', async () => {
+    const repositories = {
+      tickets: {
+        findById: vi.fn(),
+        findByGithubIssueId: vi.fn(),
+        findByGithubPrId: vi.fn(),
+        admitSentryTicket: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      conversations: {
+        findById: vi.fn(),
+        findMessages: vi.fn(),
+        create: vi.fn(),
+        appendMessage: vi.fn(),
+      },
+    } as any
+    const pipeline = createSupportPipeline({
+      ...baseConfig,
+      db: undefined,
+      repositories,
+      sentry: { ...baseConfig.sentry, ingestEnabled: false },
+    })
+    const body = Buffer.from(
+      JSON.stringify({
+        action: 'created',
+        data: { issue: { id: 'sentry-1', project: { slug: 'proj' } } },
+      })
+    )
+    const signature = crypto
+      .createHmac('sha256', baseConfig.sentry.webhookSecret)
+      .update(body)
+      .digest('hex')
+    const response = {
+      status: vi.fn(),
+      json: vi.fn(),
+    } as any
+    response.status.mockReturnValue(response)
+    response.json.mockReturnValue(response)
+
+    await pipeline.webhooks.sentry(
+      { headers: { 'sentry-hook-signature': signature }, body },
+      response
+    )
+
+    expect(response.status).toHaveBeenCalledWith(200)
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({ handled: false, reason: 'sentry_ingest_disabled' })
+    )
+    expect(repositories.tickets.admitSentryTicket).not.toHaveBeenCalled()
   })
 
   it('aceita customTools no tier1', () => {
