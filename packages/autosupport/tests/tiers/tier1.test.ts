@@ -197,4 +197,53 @@ describe('createTier1Agent', () => {
     await agent.run({ message: 'oi', conversationId: 'conv-7', userContext: userCtx })
     expect(builder).toHaveBeenCalledWith(userCtx)
   })
+
+  it('com images: monta content multimodal pro LLM e persiste placeholder no histórico', async () => {
+    const db = makeDb({ messages: [] })
+    const llm = makeLlm()
+    const agent = createTier1Agent({
+      llm,
+      db,
+      schema,
+      systemPromptBuilder: () => 'sys',
+    })
+    await agent.run({
+      message: 'o que é essa tela?',
+      conversationId: 'conv-img',
+      userContext: userCtx,
+      images: [{ mediaType: 'image', data: 'aGVsbG8=' }],
+    })
+
+    // mensagem enviada ao LLM inclui o content multimodal
+    const sentMessages = llm.calls[0].messages
+    const userTurn = sentMessages[sentMessages.length - 1]
+    expect(userTurn.content).toEqual([
+      { type: 'text', text: 'o que é essa tela?' },
+      { type: 'file', mediaType: 'image', data: 'aGVsbG8=' },
+    ])
+
+    // histórico persistido não contém o base64, só o placeholder
+    const firstSetCall = db._updateChain.set.mock.calls[0][0]
+    const savedUserMessage = firstSetCall.messages.at(-1)
+    expect(savedUserMessage.content).toBe(
+      'o que é essa tela?\n\n[imagem anexada — conteúdo não persistido]'
+    )
+    expect(savedUserMessage.content).not.toContain('aGVsbG8=')
+  })
+
+  it('sem images: comportamento inalterado (content continua string simples)', async () => {
+    const db = makeDb({ messages: [] })
+    const llm = makeLlm()
+    const agent = createTier1Agent({
+      llm,
+      db,
+      schema,
+      systemPromptBuilder: () => 'sys',
+    })
+    await agent.run({ message: 'oi', conversationId: 'conv-noimg', userContext: userCtx })
+    const sentMessages = llm.calls[0].messages
+    expect(sentMessages[sentMessages.length - 1].content).toBe('oi')
+    const firstSetCall = db._updateChain.set.mock.calls[0][0]
+    expect(firstSetCall.messages.at(-1).content).toBe('oi')
+  })
 })

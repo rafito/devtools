@@ -1,4 +1,4 @@
-import type { LlmMessage, LlmProvider } from '../llm/types.js'
+import type { ContentPart, LlmMessage, LlmProvider } from '../llm/types.js'
 import { resolveSupportRepositories } from '../persistence/drizzle.js'
 import type { SupportRepositories } from '../persistence/types.js'
 import type { SupportSchema } from '../schema/index.js'
@@ -20,6 +20,7 @@ export type RunTier1Input = {
   message: string
   conversationId: string
   userContext: UserContext
+  images?: { mediaType: string; data: string }[]
 }
 
 export function createTier1Agent(cfg: Tier1Config) {
@@ -45,11 +46,24 @@ export function createTier1Agent(cfg: Tier1Config) {
   }
 
   async function run(input: RunTier1Input): Promise<AgentResult> {
-    const { message, conversationId, userContext } = input
+    const { message, conversationId, userContext, images } = input
     const history = await loadHistory(conversationId)
-    await saveMessage(conversationId, 'user', message)
 
-    const initial: LlmMessage[] = [...history, { role: 'user', content: message }]
+    // Nunca persiste o base64 da imagem — só um placeholder de texto no
+    // histórico. A imagem em si só é enviada ao LLM no turno atual (abaixo).
+    const persistedContent = images?.length
+      ? `${message}\n\n[imagem anexada — conteúdo não persistido]`
+      : message
+    await saveMessage(conversationId, 'user', persistedContent)
+
+    const userContent: LlmMessage['content'] = images?.length
+      ? [
+          { type: 'text', text: message } satisfies ContentPart,
+          ...images.map((img): ContentPart => ({ type: 'file', mediaType: img.mediaType, data: img.data })),
+        ]
+      : message
+
+    const initial: LlmMessage[] = [...history, { role: 'user', content: userContent }]
 
     let ticketId: string | undefined
     const result = await cfg.llm.runWithTools({
