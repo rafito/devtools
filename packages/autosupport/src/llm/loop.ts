@@ -1,5 +1,12 @@
 import type { LanguageModelV4 } from '@ai-sdk/provider'
-import { type LanguageModelUsage, dynamicTool, generateText, jsonSchema, stepCountIs } from 'ai'
+import {
+  type LanguageModelUsage,
+  type ModelMessage,
+  dynamicTool,
+  generateText,
+  jsonSchema,
+  stepCountIs,
+} from 'ai'
 import { toErrorMessage } from '../errors.js'
 import type { ToolBundle } from '../types.js'
 import { type LlmMessage, LlmRunError, type LlmRunResult } from './types.js'
@@ -72,7 +79,7 @@ export async function runAgentLoop(
     generated = await generateText({
       model,
       system: opts.system,
-      messages: opts.messages as any,
+      messages: opts.messages as ModelMessage[],
       tools: aiTools,
       maxOutputTokens: opts.maxTokens ?? 4096,
       stopWhen: stepCountIs(opts.maxToolLoops + 1),
