@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAutosupportHttpServer } from '../../src/service/server'
+import { VERSION } from '../../src/version'
 
 function createRepositories() {
   const tickets = new Map<string, any>()
@@ -73,7 +74,7 @@ describe('createAutosupportHttpServer', () => {
   it('reports health without authentication', async () => {
     const response = await fetch(`${baseUrl}/health`)
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ status: 'ok', version: '0.10.0' })
+    await expect(response.json()).resolves.toEqual({ status: 'ok', version: VERSION })
   })
 
   it('requires bearer authentication for API routes', async () => {
