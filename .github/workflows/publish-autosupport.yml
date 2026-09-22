@@ -1,0 +1,46 @@
+name: Publish @devorama/autosupport
+
+# Trusted Publishing (OIDC) — configurado em npmjs.com em
+# Packages → @devorama/autosupport → Settings → Trusted Publisher,
+# apontando pra este repo + este arquivo de workflow. Sem token estático:
+# o `npm publish` final troca o OIDC token do job por um token de
+# publish de curta duração na hora.
+#
+# Trusted Publishing só funciona com `npm publish` (não `pnpm publish`),
+# mesmo em um monorepo pnpm — por isso build/test usam pnpm normalmente
+# e só o publish final roda via npm direto dentro do pacote.
+
+on:
+  push:
+    tags:
+      - "@devorama/autosupport@*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/autosupport
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: corepack pnpm install --frozen-lockfile
+        working-directory: .
+
+      - run: corepack pnpm build
+
+      - run: corepack pnpm test
+
+      - run: npm publish --access public
