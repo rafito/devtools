@@ -153,6 +153,89 @@ describe('createTier1Agent', () => {
     expect(result.text).toBe('Ticket criado.')
   })
 
+  it('captura humanHelpOffer de offer_human_help tool call', async () => {
+    const tools: ToolBundle = {
+      definitions: [
+        {
+          name: 'offer_human_help',
+          description: 'oferece ajuda humana',
+          input_schema: { type: 'object', properties: {} },
+        },
+      ],
+      execute: vi.fn().mockResolvedValue({
+        agendaUrl: 'https://calendar.app.google/ENQ8Q5T2AmT7dBNu7',
+        whatsapp: '+55 51 9235-3747',
+      }),
+    }
+
+    const db = makeDb({ messages: [] })
+    const llm: LlmProvider = {
+      runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+        const r = await opts.tools.execute('offer_human_help', {})
+        opts.onToolResult?.('offer_human_help', {}, r)
+        return { text: 'Vou te passar o contato da equipe.', steps: 1, finishReason: 'stop' }
+      }),
+    }
+
+    const agent = createTier1Agent({
+      llm,
+      db,
+      schema,
+      customTools: tools,
+      systemPromptBuilder: () => 'sys',
+      maxToolLoops: 3,
+    })
+    const result = await agent.run({
+      message: 'não consigo de jeito nenhum, já tentei tudo',
+      conversationId: 'conv-8',
+      userContext: userCtx,
+    })
+    expect(result.humanHelpOffer).toEqual({
+      agendaUrl: 'https://calendar.app.google/ENQ8Q5T2AmT7dBNu7',
+      whatsapp: '+55 51 9235-3747',
+    })
+    expect(result.text).toBe('Vou te passar o contato da equipe.')
+  })
+
+  it('não popula humanHelpOffer se a tool devolver só um dos dois campos', async () => {
+    const tools: ToolBundle = {
+      definitions: [
+        {
+          name: 'offer_human_help',
+          description: 'oferece ajuda humana',
+          input_schema: { type: 'object', properties: {} },
+        },
+      ],
+      execute: vi
+        .fn()
+        .mockResolvedValue({ agendaUrl: 'https://calendar.app.google/ENQ8Q5T2AmT7dBNu7' }),
+    }
+
+    const db = makeDb({ messages: [] })
+    const llm: LlmProvider = {
+      runWithTools: vi.fn(async (opts: LlmRunOptions) => {
+        const r = await opts.tools.execute('offer_human_help', {})
+        opts.onToolResult?.('offer_human_help', {}, r)
+        return { text: 'ok', steps: 1, finishReason: 'stop' }
+      }),
+    }
+
+    const agent = createTier1Agent({
+      llm,
+      db,
+      schema,
+      customTools: tools,
+      systemPromptBuilder: () => 'sys',
+      maxToolLoops: 3,
+    })
+    const result = await agent.run({
+      message: 'oi',
+      conversationId: 'conv-9',
+      userContext: userCtx,
+    })
+    expect(result.humanHelpOffer).toBeUndefined()
+  })
+
   it('maxToolLoops é aceito', async () => {
     const db = makeDb({ messages: [] })
     const llm = makeLlm()

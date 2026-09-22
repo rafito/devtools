@@ -104,6 +104,7 @@ export type AgentResult = {
   text: string
   conversationId: string
   ticketId?: string
+  humanHelpOffer?: { agendaUrl: string; whatsapp: string }
 }
 
 export type NotificationEvent = {
