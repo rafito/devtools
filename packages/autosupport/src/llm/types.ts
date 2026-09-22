@@ -1,6 +1,7 @@
 import type { ToolBundle } from '../types.js'
 
-export type LlmMessage = { role: 'user' | 'assistant' | 'system'; content: string }
+export type ContentPart = { type: 'text'; text: string } | { type: 'file'; mediaType: string; data: string }
+export type LlmMessage = { role: 'user' | 'assistant' | 'system'; content: string | ContentPart[] }
 export type LlmModelRole = 'fast' | 'heavy'
 
 export type LlmRunOptions = {

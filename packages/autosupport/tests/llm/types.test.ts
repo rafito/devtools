@@ -21,4 +21,31 @@ describe('LlmProvider contract', () => {
     })
     expect(r.text).toBe('fast:ok')
   })
+
+  it('aceita content multimodal (texto + imagem)', async () => {
+    const tools: ToolBundle = { definitions: [], execute: async () => ({}) }
+    const fake: LlmProvider = {
+      runWithTools: async (opts: LlmRunOptions): Promise<LlmRunResult> => ({
+        text: `${opts.messages[0].content.length}`,
+        steps: 0,
+        finishReason: 'stop',
+      }),
+    }
+    const r = await fake.runWithTools({
+      role: 'fast',
+      system: 's',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'o que é essa tela?' },
+            { type: 'file', mediaType: 'image', data: 'aGVsbG8=' },
+          ],
+        },
+      ],
+      tools,
+      maxToolLoops: 5,
+    })
+    expect(r.text).toBe('2')
+  })
 })

@@ -72,7 +72,7 @@ export async function runAgentLoop(
     generated = await generateText({
       model,
       system: opts.system,
-      messages: opts.messages,
+      messages: opts.messages as any,
       tools: aiTools,
       maxOutputTokens: opts.maxTokens ?? 4096,
       stopWhen: stepCountIs(opts.maxToolLoops + 1),

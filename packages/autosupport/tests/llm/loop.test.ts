@@ -164,3 +164,31 @@ it('preserves completed-step usage when a later model step fails', async () => {
     },
   })
 })
+
+it('aceita mensagem multimodal (texto + imagem) sem erro', async () => {
+  const model = new MockLanguageModelV4({
+    provider: 'anthropic',
+    modelId: 'claude-test',
+    doGenerate: async () => ({
+      finishReason: { unified: 'stop', raw: undefined },
+      usage,
+      content: [{ type: 'text', text: 'reconheci a tela' }],
+      warnings: [],
+    }),
+  })
+  const r = await runAgentLoop(model, {
+    system: 's',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'o que é essa tela?' },
+          { type: 'file', mediaType: 'image', data: 'aGVsbG8=' },
+        ],
+      },
+    ],
+    tools: tools(),
+    maxToolLoops: 5,
+  })
+  expect(r.text).toBe('reconheci a tela')
+})
